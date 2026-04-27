@@ -358,37 +358,50 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   }
 
   Widget _actionIcon(IconData icon, Color color, VoidCallback onTap) {
-    return IconButton(icon: Icon(icon, color: color, size: 20), onPressed: _carregando ? null : onTap, splashRadius: 20);
+    return IconButton(
+      icon: Icon(icon, color: _carregando ? Colors.grey : color, size: 20), 
+      onPressed: _carregando ? null : onTap, 
+      splashRadius: 20
+    );
   }
 // *********************bloco08 ************
-// MODAIS COM FEEDBACK DE CARREGAMENTO
+// MODAIS DE RESET, STATUS, EXCLUSÃO E FORMULÁRIO (CORRIGIDO)
 // *********************bloco08 ************
   void _modalSenha(String id, String nome) {
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
+      builder: (context) => StatefulBuilder( // Adicionado para gerenciar o estado do loading no modal
         builder: (context, setModalState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          title: const Row(children: [Icon(Icons.vpn_key_outlined, color: Colors.orange), SizedBox(width: 10), Text("Resetar Senha")]),
+          title: Row(
+            children: [
+              const Icon(Icons.vpn_key_outlined, color: Colors.orange),
+              const SizedBox(width: 10),
+              const Text("Resetar Senha"),
+            ],
+          ),
           content: Text("Deseja resetar a senha de $nome para a senha padrão (max1234)?"),
           actions: [
-            TextButton(onPressed: _carregando ? null : () => Navigator.pop(context), child: const Text("Cancelar")),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
               onPressed: _carregando ? null : () async {
-                setModalState(() => _carregando = true);
+                setState(() => _carregando = true);
+                setModalState(() {}); // Atualiza o modal para mostrar o loading
                 try {
                   await FirebaseFirestore.instance.collection('usuarios').doc(id).update({'senha_inicial': 'max1234'});
                   if (context.mounted) {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Senha de $nome resetada!"), backgroundColor: Colors.orange));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Senha de $nome resetada para max1234!"), backgroundColor: Colors.orange));
                   }
+                } catch (e) {
+                  debugPrint("Erro ao resetar senha: $e");
                 } finally {
-                  setModalState(() => _carregando = false);
+                  if (mounted) setState(() => _carregando = false);
                 }
               },
               child: _carregando 
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
                 : const Text("Confirmar Reset", style: TextStyle(color: Colors.white)),
             )
           ],
@@ -402,26 +415,27 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     String acao = statusAtual == 'ativo' ? 'DESATIVAR' : 'REATIVAR';
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
+      builder: (context) => StatefulBuilder( // Adicionado para gerenciar o estado do loading no modal
         builder: (context, setModalState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
           title: Text("$acao acesso"),
           content: Text("Deseja realmente mudar o status de $id para $novoStatus?"),
           actions: [
-            TextButton(onPressed: _carregando ? null : () => Navigator.pop(context), child: const Text("Não")),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Não")),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: novoStatus == 'ativo' ? Colors.green : Colors.red),
               onPressed: _carregando ? null : () async {
-                setModalState(() => _carregando = true);
+                setState(() => _carregando = true);
+                setModalState(() {}); // Atualiza o modal para mostrar o loading
                 try {
                   await FirebaseFirestore.instance.collection('usuarios').doc(id).update({'status': novoStatus});
                   if (mounted) Navigator.pop(context);
                 } finally {
-                  setModalState(() => _carregando = false);
+                  if (mounted) setState(() => _carregando = false);
                 }
               },
               child: _carregando 
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
                 : Text("Sim, $acao", style: const TextStyle(color: Colors.white)),
             ),
           ],
@@ -433,34 +447,55 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   void _confirmarExclusao(String id, String nome) {
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
+      builder: (context) => StatefulBuilder( // Adicionado para gerenciar o estado do loading no modal
         builder: (context, setModalState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          title: const Row(children: [Icon(Icons.warning_amber_rounded, color: Colors.red), SizedBox(width: 10), Text("Excluir Usuário?")]),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.red),
+              SizedBox(width: 10),
+              Text("Excluir Usuário?"),
+            ],
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text("Deseja realmente excluir o usuário $nome?"),
               const SizedBox(height: 15),
-              Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
-                child: const Text("Aviso: Contacte o administrador para validar junto ao Auth.", style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold))),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
+                child: const Text(
+                  "Aviso: Mesmo excluindo, contacte o administrador do sistema para que valide junto ao banco de dados (Auth).",
+                  style: TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+              ),
             ],
           ),
           actions: [
-            TextButton(onPressed: _carregando ? null : () => Navigator.pop(context), child: const Text("Cancelar")),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade900),
               onPressed: _carregando ? null : () async {
-                setModalState(() => _carregando = true);
+                setState(() => _carregando = true);
+                setModalState(() {}); // Atualiza o modal para mostrar o loading
                 try {
                   await FirebaseFirestore.instance.collection('usuarios').doc(id).delete();
-                  if (mounted) Navigator.pop(context);
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Usuário $nome removido do banco de dados."), backgroundColor: Colors.black),
+                    );
+                  }
+                } catch (e) {
+                  debugPrint("Erro ao excluir: $e");
                 } finally {
-                  setModalState(() => _carregando = false);
+                  if (mounted) setState(() => _carregando = false);
                 }
               },
               child: _carregando 
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
                 : const Text("Sim, Excluir", style: TextStyle(color: Colors.white)),
             ),
           ],
@@ -499,23 +534,34 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   onChanged: (val) => setModalState(() => perfilSel = val!),
                   decoration: const InputDecoration(labelText: "Perfil"),
                 ),
-                TextField(controller: veiculoController, decoration: const InputDecoration(labelText: "Veículo / Placa"), textCapitalization: TextCapitalization.characters),
+                TextField(
+                  controller: veiculoController,
+                  decoration: const InputDecoration(labelText: "Veículo / Placa", hintText: "AAA0000 ou AAA0A00"),
+                  textCapitalization: TextCapitalization.characters,
+                ),
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: _carregando ? null : () => Navigator.pop(context), child: const Text("Cancelar")),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
               onPressed: _carregando ? null : () async {
                 String placaLimpa = veiculoController.text.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase();
-                if (perfilSel == 'motorista' && (placaLimpa.length != 7 || !RegExp(r'^[A-Z]{3}[0-9]{1}[A-Z0-9]{1}[0-9]{2}$').hasMatch(placaLimpa))) {
-                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Placa inválida!"), backgroundColor: Colors.red));
-                   return;
+                if (perfilSel == 'motorista') {
+                  if (placaLimpa.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("O campo Veículo/Placa é obrigatório!"), backgroundColor: Colors.red));
+                    return;
+                  }
+                  if (!RegExp(r'^[A-Z]{3}[0-9]{1}[A-Z0-9]{1}[0-9]{2}$').hasMatch(placaLimpa)) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Padrão de placa inválido! Use AAA0000 ou AAA0A00."), backgroundColor: Colors.red));
+                    return;
+                  }
                 }
 
-                if (nomeController.text.isNotEmpty && emailController.text.isNotEmpty) {
-                  setModalState(() => _carregando = true);
+                if (nomeController.text.trim().isNotEmpty && emailController.text.trim().isNotEmpty) {
+                  setState(() => _carregando = true);
+                  setModalState(() {}); // Atualiza o modal para mostrar o loading
                   try {
                     String senhaPadrao = "max1234";
                     await FirebaseFirestore.instance.collection('usuarios').doc(emailController.text.trim()).set({
@@ -529,12 +575,14 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     if (!isEdit) await FirebaseAuth.instance.createUserWithEmailAndPassword(email: emailController.text.trim(), password: senhaPadrao);
                     if (context.mounted) Navigator.pop(context);
                   } finally {
-                    setModalState(() => _carregando = false);
+                    if (mounted) setState(() => _carregando = false);
                   }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Preencha Nome e E-mail!")));
                 }
               },
               child: _carregando 
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
                 : const Text("Salvar", style: TextStyle(color: Colors.white)),
             )
           ],
