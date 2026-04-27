@@ -10,7 +10,7 @@ class AdminUsersScreen extends StatefulWidget {
 
   @override
   State<AdminUsersScreen> createState() => _AdminUsersScreenState();
-} 
+}
 
 // *********************bloco02 ************
 // VARIÁVEIS E INICIALIZAÇÃO DE PERFIL
@@ -18,23 +18,21 @@ class AdminUsersScreen extends StatefulWidget {
 class _AdminUsersScreenState extends State<AdminUsersScreen> {
   final Color primaryColor = const Color(0xFF1B2C57);
   String perfilUsuarioLogado = "";
-  bool _carregando = false; 
-  String _filtroBusca = ""; 
-  
+  bool _carregando = false;
+  String _filtroBusca = "";
+
   int totalUsuarios = 0;
   int totalMotoristas = 0;
   int totalAdminGestao = 0;
   int totalCartorio = 0;
-
-  // NOVOS CONTADORES
   int totalAtivos = 0;
   int totalInativos = 0;
 
   @override
   void initState() {
     super.initState();
-    _buscarPerfilLogado(); // O erro estava aqui porque a função abaixo tinha sumido
-    _contarUsuarios(); 
+    _buscarPerfilLogado();
+    _contarUsuarios();
   }
 
   void _contarUsuarios() {
@@ -45,22 +43,13 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           totalMotoristas = snapshot.docs.where((d) => d['perfil'] == 'motorista').length;
           totalCartorio = snapshot.docs.where((d) => d['perfil'] == 'cartorio').length;
           totalAdminGestao = snapshot.docs.where((d) => d['perfil'] == 'admin' || d['perfil'] == 'gestor').length;
-          
-          totalAtivos = snapshot.docs.where((d) {
-            var data = d.data() as Map<String, dynamic>;
-            return data['status'] != 'inativo';
-          }).length;
-          
-          totalInativos = snapshot.docs.where((d) {
-            var data = d.data() as Map<String, dynamic>;
-            return data['status'] == 'inativo';
-          }).length;
+          totalAtivos = snapshot.docs.where((d) => (d.data() as Map<String, dynamic>)['status'] != 'inativo').length;
+          totalInativos = snapshot.docs.where((d) => (d.data() as Map<String, dynamic>)['status'] == 'inativo').length;
         });
       }
     });
   }
 
-  // ESTA É A FUNÇÃO QUE O FLUTTER NÃO ESTAVA ACHANDO:
   void _buscarPerfilLogado() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -72,6 +61,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       }
     }
   }
+
 // *********************bloco03 ************
 // LÓGICA DE SEGURANÇA E VALIDAÇÃO DE GESTOR
 // *********************bloco03 ************
@@ -96,29 +86,42 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         children: [
           _buildSidebar(),
           Expanded(
-            child: SingleChildScrollView(
+            child: Padding(
               padding: const EdgeInsets.all(40),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildHeader(),
                   const SizedBox(height: 30),
+                  _buildSummaryCards(),
+                  const SizedBox(height: 30),
                   _buildSearchBar(),
                   const SizedBox(height: 25),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(15),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildTableHeader(),
-                        _buildUsersList(),
-                      ],
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(15),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 15,
+                            offset: const Offset(0, 5),
+                          )
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(15),
+                        child: SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildTableHeader(),
+                              _buildUsersList(),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -180,116 +183,101 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 // CABEÇALHO, CARDS DE RESUMO E BUSCA
 // *********************bloco06 ************
   Widget _buildHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Título e Botão no topo
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Gestão de Usuários", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-                Text("Controle de acessos e perfis da equipe", style: TextStyle(color: Colors.grey, fontSize: 14)),
-              ],
-            ),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.add, color: Colors.white, size: 18),
-              label: const Text("Novo Usuário", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 20),
-                shape: const StadiumBorder(),
-              ),
-              onPressed: () => _showUserDialog(context),
-            ),
+            Text("Gestão de Usuários", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+            Text("Controle de acessos e perfis da equipe", style: TextStyle(color: Colors.grey, fontSize: 14)),
           ],
         ),
-        const SizedBox(height: 30),
-        // Cards de resumo dinâmicos
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _cardInfo("Total Usuários", totalUsuarios.toString(), Icons.people_outline),
-              const SizedBox(width: 20),
-              _cardInfo("Motoristas", totalMotoristas.toString(), Icons.delivery_dining_outlined),
-              const SizedBox(width: 20),
-              _cardInfo("Cartório", totalCartorio.toString(), Icons.assignment_outlined),
-              const SizedBox(width: 20),
-              _cardInfo("Admin/Gestão", totalAdminGestao.toString(), Icons.admin_panel_settings_outlined),
-              const SizedBox(width: 20),
-              _cardInfo("Usuários Ativos", totalAtivos.toString(), Icons.check_circle_outline, color: Colors.green),
-              const SizedBox(width: 20),
-              _cardInfo("Usuários Inativos", totalInativos.toString(), Icons.block_flipped, color: Colors.red),
-            ],
+        ElevatedButton.icon(
+          icon: const Icon(Icons.add, color: Colors.white, size: 18),
+          label: const Text("Novo Usuário", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primaryColor,
+            padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 20),
+            shape: const StadiumBorder(),
           ),
+          onPressed: () => _showUserDialog(context),
         ),
       ],
     );
   }
 
-  Widget _cardInfo(String titulo, String valor, IconData icone, {Color? color}) {
-  return Container(
-    padding: const EdgeInsets.all(15),
-    width: 180, // Mantém o padrão de largura
-    height: 75, // Mantém o padrão de altura
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
-    ),
-    child: Row(
-      children: [
-        // LADO ESQUERDO: Ícone Grande Colorido
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: (color ?? primaryColor).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(10),
+  Widget _buildSummaryCards() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _cardInfo("Total Usuários", totalUsuarios.toString(), Icons.people_outline, Colors.blue),
+          const SizedBox(width: 15),
+          _cardInfo("Ativos", totalAtivos.toString(), Icons.check_circle_outline, Colors.green),
+          const SizedBox(width: 15),
+          _cardInfo("Inativos", totalInativos.toString(), Icons.block_flipped, Colors.red),
+          const SizedBox(width: 15),
+          _cardInfo("Motoristas", totalMotoristas.toString(), Icons.delivery_dining_outlined, Colors.orange),
+          const SizedBox(width: 15),
+          _cardInfo("Admin/Gestão", totalAdminGestao.toString(), Icons.admin_panel_settings_outlined, Colors.purple),
+          const SizedBox(width: 15),
+          _cardInfo("Cartório", totalCartorio.toString(), Icons.assignment_outlined, Colors.teal),
+        ],
+      ),
+    );
+  }
+
+  Widget _cardInfo(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      width: 200,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 5))
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 24),
           ),
-          child: Icon(icone, color: color ?? primaryColor, size: 26),
-        ),
-        const SizedBox(width: 15),
-        // LADO DIREITO: Valor e Título (Legenda)
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                titulo, 
-                style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.w500),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 2),  
-              Text(
-                valor, 
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1B2C57))
-              ),
-            ],
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1B2C57))),
+              ],
+            ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
   Widget _buildSearchBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 15),
       decoration: BoxDecoration(
-        color: Colors.white, 
+        color: Colors.white,
         borderRadius: BorderRadius.circular(10),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 5)],
       ),
       child: TextField(
         onChanged: (val) => setState(() => _filtroBusca = val.toLowerCase()),
         decoration: const InputDecoration(
-          hintText: "Pesquisar usuário por nome ou e-mail...", 
-          border: InputBorder.none, 
+          hintText: "Pesquisar usuário por nome ou e-mail...",
+          border: InputBorder.none,
           icon: Icon(Icons.search, color: Colors.grey),
         ),
       ),
@@ -324,13 +312,11 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       stream: FirebaseFirestore.instance.collection('usuarios').snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-
         var docs = snapshot.data!.docs.where((doc) {
           String nome = (doc['nome'] ?? '').toString().toLowerCase();
           String email = (doc['email'] ?? '').toString().toLowerCase();
           return nome.contains(_filtroBusca) || email.contains(_filtroBusca);
         }).toList();
-
         return ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -358,14 +344,12 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           Expanded(flex: 2, child: Row(
             children: [
               _actionIcon(Icons.edit_outlined, Colors.blue, () => _validarAcaoGestor(() => _showUserDialog(context, userData: data))),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               _actionIcon(Icons.vpn_key_outlined, Colors.orange, () => _validarAcaoGestor(() => _modalSenha(docId, data['nome']))),
-              const SizedBox(width: 10),
-              _actionIcon(
-                isInativo ? Icons.play_circle_outline : Icons.block_flipped, 
-                isInativo ? Colors.green : Colors.red, 
-                () => _validarAcaoGestor(() => _confirmarAlterarStatus(docId, data['status'] ?? 'ativo'))
-              ),
+              const SizedBox(width: 8),
+              _actionIcon(isInativo ? Icons.play_circle_outline : Icons.block_flipped, isInativo ? Colors.green : Colors.red, () => _validarAcaoGestor(() => _confirmarAlterarStatus(docId, data['status'] ?? 'ativo'))),
+              const SizedBox(width: 8),
+              _actionIcon(Icons.delete_forever_outlined, Colors.red.shade900, () => _validarAcaoGestor(() => _confirmarExclusao(docId, data['nome']))),
             ],
           )),
         ],
@@ -374,52 +358,41 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   }
 
   Widget _actionIcon(IconData icon, Color color, VoidCallback onTap) {
-    return IconButton(icon: Icon(icon, color: color, size: 20), onPressed: onTap, splashRadius: 20);
+    return IconButton(icon: Icon(icon, color: color, size: 20), onPressed: _carregando ? null : onTap, splashRadius: 20);
   }
-void _modalSenha(String id, String nome) {
+// *********************bloco08 ************
+// MODAIS COM FEEDBACK DE CARREGAMENTO
+// *********************bloco08 ************
+  void _modalSenha(String id, String nome) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: Row(
-          children: [
-            Icon(Icons.vpn_key_outlined, color: Colors.orange),
-            SizedBox(width: 10),
-            Text("Resetar Senha"),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: const Row(children: [Icon(Icons.vpn_key_outlined, color: Colors.orange), SizedBox(width: 10), Text("Resetar Senha")]),
+          content: Text("Deseja resetar a senha de $nome para a senha padrão (max1234)?"),
+          actions: [
+            TextButton(onPressed: _carregando ? null : () => Navigator.pop(context), child: const Text("Cancelar")),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              onPressed: _carregando ? null : () async {
+                setModalState(() => _carregando = true);
+                try {
+                  await FirebaseFirestore.instance.collection('usuarios').doc(id).update({'senha_inicial': 'max1234'});
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Senha de $nome resetada!"), backgroundColor: Colors.orange));
+                  }
+                } finally {
+                  setModalState(() => _carregando = false);
+                }
+              },
+              child: _carregando 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Text("Confirmar Reset", style: TextStyle(color: Colors.white)),
+            )
           ],
         ),
-        content: Text("Deseja resetar a senha de $nome para a senha padrão (max1234)?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancelar"),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            onPressed: () async {
-              try {
-                // Atualiza o campo senha_inicial no Firestore para consulta do usuário
-                await FirebaseFirestore.instance
-                    .collection('usuarios')
-                    .doc(id)
-                    .update({'senha_inicial': 'max1234'});
-                
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("Senha de $nome resetada para max1234!"),
-                      backgroundColor: Colors.orange,
-                    ),
-                  );
-                }
-              } catch (e) {
-                debugPrint("Erro ao resetar senha: $e");
-              }
-            },
-            child: const Text("Confirmar Reset", style: TextStyle(color: Colors.white)),
-          )
-        ],
       ),
     );
   }
@@ -428,29 +401,70 @@ void _modalSenha(String id, String nome) {
     String novoStatus = statusAtual == 'ativo' ? 'inativo' : 'ativo';
     String acao = statusAtual == 'ativo' ? 'DESATIVAR' : 'REATIVAR';
     showDialog(
-      context: context, 
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: Text("$acao acesso"),
-        content: Text("Deseja realmente mudar o status de $id para $novoStatus?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Não")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: novoStatus == 'ativo' ? Colors.green : Colors.red),
-            onPressed: _carregando ? null : () async {
-              setState(() => _carregando = true);
-              try {
-                await FirebaseFirestore.instance.collection('usuarios').doc(id).update({'status': novoStatus});
-                if (mounted) Navigator.pop(context);
-              } finally {
-                if (mounted) setState(() => _carregando = false);
-              }
-            }, 
-            child: _carregando 
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : Text("Sim, $acao", style: const TextStyle(color: Colors.white)),
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: Text("$acao acesso"),
+          content: Text("Deseja realmente mudar o status de $id para $novoStatus?"),
+          actions: [
+            TextButton(onPressed: _carregando ? null : () => Navigator.pop(context), child: const Text("Não")),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: novoStatus == 'ativo' ? Colors.green : Colors.red),
+              onPressed: _carregando ? null : () async {
+                setModalState(() => _carregando = true);
+                try {
+                  await FirebaseFirestore.instance.collection('usuarios').doc(id).update({'status': novoStatus});
+                  if (mounted) Navigator.pop(context);
+                } finally {
+                  setModalState(() => _carregando = false);
+                }
+              },
+              child: _carregando 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : Text("Sim, $acao", style: const TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmarExclusao(String id, String nome) {
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: const Row(children: [Icon(Icons.warning_amber_rounded, color: Colors.red), SizedBox(width: 10), Text("Excluir Usuário?")]),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text("Deseja realmente excluir o usuário $nome?"),
+              const SizedBox(height: 15),
+              Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
+                child: const Text("Aviso: Contacte o administrador para validar junto ao Auth.", style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold))),
+            ],
           ),
-        ],
+          actions: [
+            TextButton(onPressed: _carregando ? null : () => Navigator.pop(context), child: const Text("Cancelar")),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade900),
+              onPressed: _carregando ? null : () async {
+                setModalState(() => _carregando = true);
+                try {
+                  await FirebaseFirestore.instance.collection('usuarios').doc(id).delete();
+                  if (mounted) Navigator.pop(context);
+                } finally {
+                  setModalState(() => _carregando = false);
+                }
+              },
+              child: _carregando 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Text("Sim, Excluir", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -465,7 +479,7 @@ void _modalSenha(String id, String nome) {
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
+        builder: (context, setModalState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
           title: Text(isEdit ? "Editar Usuário" : "Novo Usuário"),
           content: SingleChildScrollView(
@@ -482,7 +496,7 @@ void _modalSenha(String id, String nome) {
                     DropdownMenuItem(value: 'cartorio', child: Text("Cartório")),
                     DropdownMenuItem(value: 'motorista', child: Text("Motorista")),
                   ],
-                  onChanged: (val) => setState(() => perfilSel = val!),
+                  onChanged: (val) => setModalState(() => perfilSel = val!),
                   decoration: const InputDecoration(labelText: "Perfil"),
                 ),
                 TextField(controller: veiculoController, decoration: const InputDecoration(labelText: "Veículo / Placa"), textCapitalization: TextCapitalization.characters),
@@ -490,29 +504,32 @@ void _modalSenha(String id, String nome) {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
+            TextButton(onPressed: _carregando ? null : () => Navigator.pop(context), child: const Text("Cancelar")),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
               onPressed: _carregando ? null : () async {
+                String placaLimpa = veiculoController.text.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase();
+                if (perfilSel == 'motorista' && (placaLimpa.length != 7 || !RegExp(r'^[A-Z]{3}[0-9]{1}[A-Z0-9]{1}[0-9]{2}$').hasMatch(placaLimpa))) {
+                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Placa inválida!"), backgroundColor: Colors.red));
+                   return;
+                }
+
                 if (nomeController.text.isNotEmpty && emailController.text.isNotEmpty) {
-                  setState(() => _carregando = true);
+                  setModalState(() => _carregando = true);
                   try {
                     String senhaPadrao = "max1234";
                     await FirebaseFirestore.instance.collection('usuarios').doc(emailController.text.trim()).set({
                       'nome': nomeController.text.trim(),
                       'email': emailController.text.trim(),
                       'perfil': perfilSel,
-                      'veiculo': veiculoController.text.trim().toUpperCase(),
+                      'veiculo': placaLimpa,
                       'senha_inicial': isEdit ? (userData?['senha_inicial'] ?? senhaPadrao) : senhaPadrao,
                       'status': userData?['status'] ?? 'ativo',
                     }, SetOptions(merge: true));
-
-                    if (!isEdit) {
-                      await FirebaseAuth.instance.createUserWithEmailAndPassword(email: emailController.text.trim(), password: senhaPadrao);
-                    }
+                    if (!isEdit) await FirebaseAuth.instance.createUserWithEmailAndPassword(email: emailController.text.trim(), password: senhaPadrao);
                     if (context.mounted) Navigator.pop(context);
                   } finally {
-                    if (mounted) setState(() => _carregando = false);
+                    setModalState(() => _carregando = false);
                   }
                 }
               },
