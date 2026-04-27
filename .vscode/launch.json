@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Axis Solutions (Web Estável)",
+            "request": "launch",
+            "type": "dart",
+            "args": [
+                "-d", 
+                "web-server", 
+                "--web-port", 
+                "5000", 
+                "--web-hostname", 
+                "localhost"
+            ]
+        }
+    ]
+}

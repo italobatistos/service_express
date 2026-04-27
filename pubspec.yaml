@@ -1,5 +1,5 @@
 name: axis_solutions
-description: "A new Flutter project."
+description: "Sistema de Logística e Gestão - Axis Solutions"
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -11,23 +11,29 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # Ícones e Interface
   cupertino_icons: ^1.0.8
+  font_awesome_flutter: ^10.7.0 # Adicionado para ícones de frota/admin mais variados
+
+  # Utilidades e Sensores
   image_picker: ^1.2.1
   geolocator: ^14.0.2
   url_launcher: ^6.3.2
   shared_preferences: ^2.5.5
+  file_picker: ^11.0.2
+
+  # Firebase (Essenciais para o que vamos fazer agora)
   firebase_core: ^4.7.0
   firebase_auth: ^6.4.0
+  cloud_firestore: ^6.3.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
   flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true
 
-  # Ajustado para ler todas as imagens da pasta assets/images
   assets:
     - assets/images/

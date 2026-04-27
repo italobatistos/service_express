@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'login_screen.dart';
-import 'home_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -15,50 +13,62 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _iniciarTransicao();
+    _verificarAuth();
   }
 
-  void _iniciarTransicao() {
-    // Tempo de exibição da Splash antes da transição
-    Timer(const Duration(seconds: 3), () async {
-      // Verifica se o usuário já está autenticado no Firebase
-      User? user = FirebaseAuth.instance.currentUser;
+  Future<void> _verificarAuth() async {
+    // 2 segundos de exibição da logo
+    await Future.delayed(const Duration(seconds: 2));
 
-      if (!mounted) return;
+    User? user = FirebaseAuth.instance.currentUser;
 
-      if (user != null) {
-        // Se já estiver logado, vai direto para a Home
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
-      } else {
-        // Se não, vai para a tela de Login que acabamos de ajustar
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
+    if (user == null) {
+      if (mounted) Navigator.pushReplacementNamed(context, '/login');
+    } else {
+      try {
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('usuarios')
+            .doc(user.email)
+            .get();
+
+        if (mounted) {
+          if (userDoc.exists) {
+            String perfil = userDoc['perfil'] ?? '';
+            // Permissão para os perfis que podem acessar a Web
+            if (perfil == 'admin' || perfil == 'gestor') {
+              Navigator.pushReplacementNamed(context, '/usuarios');
+            } else {
+              await FirebaseAuth.instance.signOut();
+              Navigator.pushReplacementNamed(context, '/login');
+            }
+          } else {
+            Navigator.pushReplacementNamed(context, '/login');
+          }
+        }
+      } catch (e) {
+        if (mounted) Navigator.pushReplacementNamed(context, '/login');
       }
-    });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // Mantendo o fundo limpo do seu layout
+      // MUDANÇA CRUCIAL: Fundo branco puro para não virar "essa azul" de novo
+      backgroundColor: Colors.white, 
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Usando a sua logo exata
+            // Logo Axis
             Image.asset(
-              'assets/images/logo_axis_login.png',
+              'assets/images/logo_axis_login.png', 
               height: 150,
             ),
             const SizedBox(height: 30),
-            // Indicador de carregamento sutil com a cor da Axis
+            // Carregamento no azul principal do seu projeto
             const CircularProgressIndicator(
-              color: Color(0xFF1B2C57),
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1B2C57)),
             ),
           ],
         ),
