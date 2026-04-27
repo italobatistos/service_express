@@ -26,10 +26,14 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   int totalAdminGestao = 0;
   int totalCartorio = 0;
 
+  // NOVOS CONTADORES
+  int totalAtivos = 0;
+  int totalInativos = 0;
+
   @override
   void initState() {
     super.initState();
-    _buscarPerfilLogado();
+    _buscarPerfilLogado(); // O erro estava aqui porque a função abaixo tinha sumido
     _contarUsuarios(); 
   }
 
@@ -41,11 +45,22 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           totalMotoristas = snapshot.docs.where((d) => d['perfil'] == 'motorista').length;
           totalCartorio = snapshot.docs.where((d) => d['perfil'] == 'cartorio').length;
           totalAdminGestao = snapshot.docs.where((d) => d['perfil'] == 'admin' || d['perfil'] == 'gestor').length;
+          
+          totalAtivos = snapshot.docs.where((d) {
+            var data = d.data() as Map<String, dynamic>;
+            return data['status'] != 'inativo';
+          }).length;
+          
+          totalInativos = snapshot.docs.where((d) {
+            var data = d.data() as Map<String, dynamic>;
+            return data['status'] == 'inativo';
+          }).length;
         });
       }
     });
   }
 
+  // ESTA É A FUNÇÃO QUE O FLUTTER NÃO ESTAVA ACHANDO:
   void _buscarPerfilLogado() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -204,6 +219,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               _cardInfo("Cartório", totalCartorio.toString(), Icons.assignment_outlined),
               const SizedBox(width: 20),
               _cardInfo("Admin/Gestão", totalAdminGestao.toString(), Icons.admin_panel_settings_outlined),
+              const SizedBox(width: 20),
+              _cardInfo("Usuários Ativos", totalAtivos.toString(), Icons.check_circle_outline, color: Colors.green),
+              const SizedBox(width: 20),
+              _cardInfo("Usuários Inativos", totalInativos.toString(), Icons.block_flipped, color: Colors.red),
             ],
           ),
         ),
@@ -211,33 +230,52 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     );
   }
 
-  Widget _cardInfo(String titulo, String valor, IconData icone) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      width: 220,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: primaryColor.withOpacity(0.1),
-            child: Icon(icone, color: primaryColor, size: 20),
+  Widget _cardInfo(String titulo, String valor, IconData icone, {Color? color}) {
+  return Container(
+    padding: const EdgeInsets.all(15),
+    width: 180, // Mantém o padrão de largura
+    height: 75, // Mantém o padrão de altura
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+    ),
+    child: Row(
+      children: [
+        // LADO ESQUERDO: Ícone Grande Colorido
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: (color ?? primaryColor).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
           ),
-          const SizedBox(width: 15),
-          Column(
+          child: Icon(icone, color: color ?? primaryColor, size: 26),
+        ),
+        const SizedBox(width: 15),
+        // LADO DIREITO: Valor e Título (Legenda)
+        Expanded(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(titulo, style: const TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w500)),
-              Text(valor, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(
+                titulo, 
+                style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.w500),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),  
+              Text(
+                valor, 
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1B2C57))
+              ),
             ],
-          )
-        ],
-      ),
-    );
-  }
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildSearchBar() {
     return Container(
@@ -257,6 +295,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       ),
     );
   }
+
 // *********************bloco07 ************
 // LISTA DE USUÁRIOS E LINHAS (LAYOUT ESTÁVEL)
 // *********************bloco07 ************
