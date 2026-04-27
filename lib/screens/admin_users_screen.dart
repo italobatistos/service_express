@@ -10,17 +10,17 @@ class AdminUsersScreen extends StatefulWidget {
 
   @override
   State<AdminUsersScreen> createState() => _AdminUsersScreenState();
-}
+} 
+
 // *********************bloco02 ************
 // VARIÁVEIS E INICIALIZAÇÃO DE PERFIL
 // *********************bloco02 ************
-  class _AdminUsersScreenState extends State<AdminUsersScreen> {
+class _AdminUsersScreenState extends State<AdminUsersScreen> {
   final Color primaryColor = const Color(0xFF1B2C57);
   String perfilUsuarioLogado = "";
-  bool _carregando = false; // <--- ADICIONE ESTA LINHA AQUI
-  String _filtroBusca = ""; // Variável para armazenar a pesquisa
+  bool _carregando = false; 
+  String _filtroBusca = ""; 
   
-  // Variáveis para armazenar as contagens
   int totalUsuarios = 0;
   int totalMotoristas = 0;
   int totalAdminGestao = 0;
@@ -30,10 +30,9 @@ class AdminUsersScreen extends StatefulWidget {
   void initState() {
     super.initState();
     _buscarPerfilLogado();
-    _contarUsuarios(); // Chama a contagem ao iniciar
+    _contarUsuarios(); 
   }
 
-  // Função que escuta o banco e atualiza os números em tempo real
   void _contarUsuarios() {
     FirebaseFirestore.instance.collection('usuarios').snapshots().listen((snapshot) {
       if (mounted) {
@@ -58,7 +57,6 @@ class AdminUsersScreen extends StatefulWidget {
       }
     }
   }
-
 // *********************bloco03 ************
 // LÓGICA DE SEGURANÇA E VALIDAÇÃO DE GESTOR
 // *********************bloco03 ************
@@ -170,7 +168,7 @@ class AdminUsersScreen extends StatefulWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 1. TÍTULO E BOTÃO (Agora no topo)
+        // Título e Botão no topo
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -194,8 +192,7 @@ class AdminUsersScreen extends StatefulWidget {
           ],
         ),
         const SizedBox(height: 30),
-
-        // 2. CARDS DE RESUMO (Agora abaixo do título)
+        // Cards de resumo dinâmicos
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
@@ -251,7 +248,7 @@ class AdminUsersScreen extends StatefulWidget {
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 5)],
       ),
       child: TextField(
-        onChanged: (val) => setState(() => _filtroBusca = val.toLowerCase()), // Atualiza a busca
+        onChanged: (val) => setState(() => _filtroBusca = val.toLowerCase()),
         decoration: const InputDecoration(
           hintText: "Pesquisar usuário por nome ou e-mail...", 
           border: InputBorder.none, 
@@ -261,20 +258,23 @@ class AdminUsersScreen extends StatefulWidget {
     );
   }
 // *********************bloco07 ************
-// TABELA: HEADER, LISTAGEM E LINHAS
+// LISTA DE USUÁRIOS E LINHAS (LAYOUT ESTÁVEL)
 // *********************bloco07 ************
   Widget _buildTableHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 20),
-      decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: const BorderRadius.vertical(top: Radius.circular(15))),
+      padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+      ),
       child: const Row(
         children: [
-          Expanded(flex: 3, child: Text("NOME", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black54))),
-          Expanded(flex: 3, child: Text("E-MAIL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black54))),
-          Expanded(flex: 2, child: Text("PERFIL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black54))),
-          Expanded(flex: 2, child: Text("VEÍCULO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black54))),
-          Expanded(flex: 2, child: Text("ACESSO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black54))),
-          Expanded(flex: 2, child: Text("AÇÕES", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black54))),
+          Expanded(flex: 3, child: Text("NOME", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey))),
+          Expanded(flex: 3, child: Text("E-MAIL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey))),
+          Expanded(flex: 2, child: Text("PERFIL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey))),
+          Expanded(flex: 2, child: Text("VEÍCULO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey))),
+          Expanded(flex: 2, child: Text("ACESSO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey))),
+          Expanded(flex: 2, child: Text("AÇÕES", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey))),
         ],
       ),
     );
@@ -286,19 +286,11 @@ class AdminUsersScreen extends StatefulWidget {
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-        // FILTRANDO A LISTA LOCALMENTE
         var docs = snapshot.data!.docs.where((doc) {
           String nome = (doc['nome'] ?? '').toString().toLowerCase();
           String email = (doc['email'] ?? '').toString().toLowerCase();
           return nome.contains(_filtroBusca) || email.contains(_filtroBusca);
         }).toList();
-
-        if (docs.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(20),
-            child: Text("Nenhum usuário encontrado."),
-          );
-        }
 
         return ListView.builder(
           shrinkWrap: true,
@@ -306,8 +298,7 @@ class AdminUsersScreen extends StatefulWidget {
           itemCount: docs.length,
           itemBuilder: (context, index) {
             var data = docs[index].data() as Map<String, dynamic>;
-            String docId = docs[index].id;
-            return _buildUserRow(data, docId);
+            return _buildUserRow(data, docs[index].id);
           },
         );
       },
@@ -315,14 +306,15 @@ class AdminUsersScreen extends StatefulWidget {
   }
 
   Widget _buildUserRow(Map<String, dynamic> data, String docId) {
+    bool isInativo = data['status'] == 'inativo';
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 18),
       child: Row(
         children: [
-          Expanded(flex: 3, child: Text(data['nome'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-          Expanded(flex: 3, child: Text(data['email'] ?? '', style: const TextStyle(fontSize: 13))),
-          Expanded(flex: 2, child: Text(data['perfil'] ?? '', style: const TextStyle(fontSize: 13))),
-          Expanded(flex: 2, child: Text(data['veiculo'] ?? '---', style: const TextStyle(fontSize: 13))),
+          Expanded(flex: 3, child: Text(data['nome'] ?? '', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isInativo ? Colors.grey : Colors.black, decoration: isInativo ? TextDecoration.lineThrough : null))),
+          Expanded(flex: 3, child: Text(data['email'] ?? '', style: TextStyle(fontSize: 13, color: isInativo ? Colors.grey : Colors.black))),
+          Expanded(flex: 2, child: Text(data['perfil'] ?? '', style: TextStyle(fontSize: 13, color: isInativo ? Colors.grey : Colors.black))),
+          Expanded(flex: 2, child: Text(data['veiculo'] ?? '---', style: TextStyle(fontSize: 13, color: isInativo ? Colors.grey : Colors.black))),
           Expanded(flex: 2, child: Text(perfilUsuarioLogado == 'gestor' ? (data['senha_inicial'] ?? '') : '******', style: const TextStyle(fontSize: 13))),
           Expanded(flex: 2, child: Row(
             children: [
@@ -330,7 +322,11 @@ class AdminUsersScreen extends StatefulWidget {
               const SizedBox(width: 10),
               _actionIcon(Icons.vpn_key_outlined, Colors.orange, () => _validarAcaoGestor(() => _modalSenha(docId, data['nome']))),
               const SizedBox(width: 10),
-              _actionIcon(Icons.delete_outline, Colors.red, () => _validarAcaoGestor(() => _confirmarDelete(docId))),
+              _actionIcon(
+                isInativo ? Icons.play_circle_outline : Icons.block_flipped, 
+                isInativo ? Colors.green : Colors.red, 
+                () => _validarAcaoGestor(() => _confirmarAlterarStatus(docId, data['status'] ?? 'ativo'))
+              ),
             ],
           )),
         ],
@@ -339,59 +335,81 @@ class AdminUsersScreen extends StatefulWidget {
   }
 
   Widget _actionIcon(IconData icon, Color color, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(5),
-      child: Padding(padding: const EdgeInsets.all(5), child: Icon(icon, color: color, size: 18)),
-    );
+    return IconButton(icon: Icon(icon, color: color, size: 20), onPressed: onTap, splashRadius: 20);
   }
-
-// *********************bloco08 ************
-// MODAIS DE SENHA, EXCLUSÃO E DIÁLOGO DE USUÁRIO
-// *********************bloco08 ************
-
-  void _modalSenha(String id, String nome) {
-    final nova = TextEditingController();
+void _modalSenha(String id, String nome) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: Text("Nova Senha - $nome"),
-        content: TextField(
-          controller: nova, 
-          decoration: const InputDecoration(labelText: "Digite a nova senha"),
+        title: Row(
+          children: [
+            Icon(Icons.vpn_key_outlined, color: Colors.orange),
+            SizedBox(width: 10),
+            Text("Resetar Senha"),
+          ],
         ),
+        content: Text("Deseja resetar a senha de $nome para a senha padrão (max1234)?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancelar"),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
             onPressed: () async {
-              await FirebaseFirestore.instance.collection('usuarios').doc(id).update({
-                'senha_inicial': nova.text.trim(),
-              });
-              Navigator.pop(context);
+              try {
+                // Atualiza o campo senha_inicial no Firestore para consulta do usuário
+                await FirebaseFirestore.instance
+                    .collection('usuarios')
+                    .doc(id)
+                    .update({'senha_inicial': 'max1234'});
+                
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Senha de $nome resetada para max1234!"),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              } catch (e) {
+                debugPrint("Erro ao resetar senha: $e");
+              }
             },
-            child: const Text("Salvar", style: TextStyle(color: Colors.white)),
+            child: const Text("Confirmar Reset", style: TextStyle(color: Colors.white)),
           )
         ],
       ),
     );
   }
 
-  void _confirmarDelete(String id) {
+  void _confirmarAlterarStatus(String id, String statusAtual) {
+    String novoStatus = statusAtual == 'ativo' ? 'inativo' : 'ativo';
+    String acao = statusAtual == 'ativo' ? 'DESATIVAR' : 'REATIVAR';
     showDialog(
       context: context, 
       builder: (context) => AlertDialog(
-        title: const Text("Excluir"),
-        content: const Text("Deseja remover este acesso?"),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: Text("$acao acesso"),
+        content: Text("Deseja realmente mudar o status de $id para $novoStatus?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Não")),
           ElevatedButton(
-            onPressed: () async {
-              await FirebaseFirestore.instance.collection('usuarios').doc(id).delete();
-              Navigator.pop(context);
+            style: ElevatedButton.styleFrom(backgroundColor: novoStatus == 'ativo' ? Colors.green : Colors.red),
+            onPressed: _carregando ? null : () async {
+              setState(() => _carregando = true);
+              try {
+                await FirebaseFirestore.instance.collection('usuarios').doc(id).update({'status': novoStatus});
+                if (mounted) Navigator.pop(context);
+              } finally {
+                if (mounted) setState(() => _carregando = false);
+              }
             }, 
-            child: const Text("Sim")
+            child: _carregando 
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : Text("Sim, $acao", style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -428,11 +446,7 @@ class AdminUsersScreen extends StatefulWidget {
                   onChanged: (val) => setState(() => perfilSel = val!),
                   decoration: const InputDecoration(labelText: "Perfil"),
                 ),
-                TextField(
-                  controller: veiculoController, 
-                  decoration: const InputDecoration(labelText: "Veículo / Placa"),
-                  textCapitalization: TextCapitalization.characters,
-                ),
+                TextField(controller: veiculoController, decoration: const InputDecoration(labelText: "Veículo / Placa"), textCapitalization: TextCapitalization.characters),
               ],
             ),
           ),
@@ -443,42 +457,28 @@ class AdminUsersScreen extends StatefulWidget {
               onPressed: _carregando ? null : () async {
                 if (nomeController.text.isNotEmpty && emailController.text.isNotEmpty) {
                   setState(() => _carregando = true);
-
                   try {
                     String senhaPadrao = "max1234";
-
-                    // 1. Salva/Atualiza no Firestore
                     await FirebaseFirestore.instance.collection('usuarios').doc(emailController.text.trim()).set({
                       'nome': nomeController.text.trim(),
                       'email': emailController.text.trim(),
                       'perfil': perfilSel,
                       'veiculo': veiculoController.text.trim().toUpperCase(),
                       'senha_inicial': isEdit ? (userData?['senha_inicial'] ?? senhaPadrao) : senhaPadrao,
+                      'status': userData?['status'] ?? 'ativo',
                     }, SetOptions(merge: true));
 
-                    // 2. Cria no Authentication se for novo usuário
                     if (!isEdit) {
-                      await FirebaseAuth.instance.createUserWithEmailAndPassword(
-                        email: emailController.text.trim(),
-                        password: senhaPadrao,
-                      );
+                      await FirebaseAuth.instance.createUserWithEmailAndPassword(email: emailController.text.trim(), password: senhaPadrao);
                     }
-
                     if (context.mounted) Navigator.pop(context);
-                  } catch (e) {
-                    debugPrint("Erro ao processar: $e");
-                    // Opcional: Adicionar um SnackBar aqui para avisar o erro ao usuário
                   } finally {
                     if (mounted) setState(() => _carregando = false);
                   }
                 }
               },
               child: _carregando 
-                ? const SizedBox(
-                    width: 20, 
-                    height: 20, 
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                  )
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                 : const Text("Salvar", style: TextStyle(color: Colors.white)),
             )
           ],
@@ -486,4 +486,4 @@ class AdminUsersScreen extends StatefulWidget {
       ),
     );
   }
-} // <--- Certifique-se de que esta última chave fecha a classe _AdminUsersScreenState
+}
