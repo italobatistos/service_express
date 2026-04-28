@@ -36,7 +36,7 @@ class _SplashScreenState extends State<SplashScreen> {
             String perfil = userDoc['perfil'] ?? '';
             // Permissão para os perfis que podem acessar a Web
             if (perfil == 'admin' || perfil == 'gestor') {
-              Navigator.pushReplacementNamed(context, '/usuarios');
+              Navigator.pushReplacementNamed(context, '/import_xml');
             } else {
               await FirebaseAuth.instance.signOut();
               Navigator.pushReplacementNamed(context, '/login');
