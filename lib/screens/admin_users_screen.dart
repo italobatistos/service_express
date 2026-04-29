@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../utils/validadores.dart';
-import '../utils/conversores.dart'; // Import da sua nova utils
+import '../utils/conversores.dart';
+import '../utils/estilos.dart';
 
 class AdminUsersScreen extends StatefulWidget {
   const AdminUsersScreen({super.key});
@@ -16,6 +17,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   String perfilUsuarioLogado = "";
   bool _carregando = false;
   String _filtroBusca = "";
+  String _filtroPerfilStatus = "Todos";
 
   int totalUsuarios = 0;
   int totalMotoristas = 0;
@@ -31,15 +33,12 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     _contarUsuarios();
   }
 
-  // FUNÇÃO PARA ALTERNAR STATUS (O MOTOR DO CLIQUE)
   void _alternarStatusUsuario(String email, String statusAtual) async {
     String novoStatus = (statusAtual.toLowerCase() == 'ativo') ? 'inativo' : 'ativo';
     try {
-      await FirebaseFirestore.instance
-          .collection('usuarios')
-          .doc(email)
-          .update({'status': novoStatus});
-          
+      await FirebaseFirestore.instance.collection('usuarios').doc(email).update(
+        {'status': novoStatus},
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Usuário agora está $novoStatus"),
@@ -92,7 +91,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           const SizedBox(height: 30),
           _buildSearchBar(),
           const SizedBox(height: 20),
-          Expanded(child: _buildUsersTable()),
+          Expanded(child: _buildUsersGrid()),
         ],
       ),
     );
@@ -128,7 +127,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          _cardInfo("Total", totalUsuarios.toString(), Icons.people, Colors.blue),
+          _cardInfo("Todos", totalUsuarios.toString(), Icons.people, Colors.blue),
           _cardInfo("Motoristas", totalMotoristas.toString(), Icons.directions_car, Colors.orange),
           _cardInfo("Admin/Gestão", totalAdminGestao.toString(), Icons.admin_panel_settings, Colors.purple),
           _cardInfo("Cartório", totalCartorio.toString(), Icons.edit_document, Colors.teal),
@@ -140,33 +139,50 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   }
 
   Widget _cardInfo(String title, String value, IconData icon, Color color) {
-    return Container(
-      width: 180,
-      margin: const EdgeInsets.only(right: 20),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 30),
-          const SizedBox(width: 15),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-              Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ],
-          ),
-        ],
+    bool selecionado = _filtroPerfilStatus == title;
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _filtroPerfilStatus = selecionado ? "Todos" : title;
+        });
+      },
+      borderRadius: BorderRadius.circular(15),
+      child: Container(
+        width: 180,
+        margin: const EdgeInsets.only(right: 20),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          border: selecionado ? Border.all(color: color, width: 2) : null,
+          boxShadow: [
+            BoxShadow(
+              color: selecionado ? color.withOpacity(0.1) : Colors.black.withOpacity(0.02), 
+              blurRadius: 10
+            )
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 30),
+            const SizedBox(width: 15),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildSearchBar() {
     return Container(
+      width: 450,
       padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -184,79 +200,138 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     );
   }
 
-  Widget _buildUsersTable() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
-      ),
-      child: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('usuarios').snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          
-          var docs = snapshot.data!.docs.where((d) {
-            var nome = (d['nome'] ?? "").toString().toLowerCase();
-            var email = (d['email'] ?? "").toString().toLowerCase();
-            return nome.contains(_filtroBusca) || email.contains(_filtroBusca);
-          }).toList();
+  Widget _buildUsersGrid() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('usuarios').snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(15),
-            child: ListView.separated(
-              itemCount: docs.length,
-              separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey[100]),
-              itemBuilder: (context, index) {
-                var user = docs[index].data() as Map<String, dynamic>;
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 25, vertical: 8),
-                  leading: CircleAvatar(
-                    backgroundColor: primaryColor.withOpacity(0.1),
-                    child: Text((user['nome'] ?? "U")[0].toUpperCase(), style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
-                  ),
-                  title: Text(user['nome'] ?? "Sem Nome", style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(user['email'] ?? "Sem E-mail"),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
+        var docs = snapshot.data!.docs.where((d) {
+          var dados = d.data() as Map<String, dynamic>;
+          var nome = (dados['nome'] ?? "").toString().toLowerCase();
+          var email = (dados['email'] ?? "").toString().toLowerCase();
+          var perfil = (dados['perfil'] ?? "").toString();
+          var status = (dados['status'] ?? "").toString();
+
+          bool bateBusca = nome.contains(_filtroBusca) || email.contains(_filtroBusca);
+
+          bool bateCategoria = true;
+          if (_filtroPerfilStatus == "Motoristas") bateCategoria = perfil == 'motorista';
+          if (_filtroPerfilStatus == "Admin/Gestão") bateCategoria = (perfil == 'admin' || perfil == 'gestor');
+          if (_filtroPerfilStatus == "Cartório") bateCategoria = perfil == 'cartorio';
+          if (_filtroPerfilStatus == "Ativos") bateCategoria = status == 'ativo';
+          if (_filtroPerfilStatus == "Inativos") bateCategoria = status == 'inativo';
+
+          return bateBusca && bateCategoria;
+        }).toList();
+
+        return GridView.builder(
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 450,
+            mainAxisExtent: 180,
+            crossAxisSpacing: 20,
+            mainAxisSpacing: 20,
+          ),
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            var user = docs[index].data() as Map<String, dynamic>;
+            String veiculo = (user['veiculo'] ?? "").toString();
+            String perfil = (user['perfil'] ?? 'motorista').toString();
+            String status = (user['status'] ?? 'inativo').toString();
+            String nomeUser = (user['nome'] ?? "Sem Nome").toString();
+
+            return Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      // ALTERAÇÃO LINHA 127: ADICIONADO INKWELL PARA O CLIQUE
-                      InkWell(
-                        onTap: () => _alternarStatusUsuario(user['email'], user['status'] ?? 'inativo'),
-                        borderRadius: BorderRadius.circular(20),
-                        child: _statusBadge(user['status'] ?? 'inativo'),
+                      CircleAvatar(
+                        backgroundColor: primaryColor.withOpacity(0.1),
+                        child: Text(nomeUser.isNotEmpty ? nomeUser[0].toUpperCase() : "U",
+                            style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
                       ),
-                      const SizedBox(width: 20),
+                      const SizedBox(width: 15),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(nomeUser, 
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              overflow: TextOverflow.ellipsis),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: EstilosApp.corPerfil(perfil).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                EstilosApp.nomePerfil(perfil).toUpperCase(),
+                                style: TextStyle(color: EstilosApp.corPerfil(perfil), fontSize: 9, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 20), 
-                        onPressed: () => _abrirModalUsuario(userData: user, isEdit: true)
+                        icon: const Icon(Icons.edit_outlined, size: 20, color: Colors.grey),
+                        onPressed: () => _abrirModalUsuario(userData: user, isEdit: true),
                       ),
                     ],
                   ),
-                );
-              },
-            ),
-          );
-        },
-      ),
+                  const Spacer(),
+                  Text(user['email'] ?? "Sem E-mail", style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  // AJUSTE DE PADRONIZAÇÃO: Usamos um Stack ou Row com Spacer para garantir que o Status fique sempre à direita
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Se não tem veículo, o SizedBox expandido empurra o badge para a direita
+                      if (veiculo.isNotEmpty) 
+                        Row(
+                          children: [
+                            Icon(Icons.directions_car, size: 16, color: primaryColor.withOpacity(0.6)),
+                            const SizedBox(width: 5),
+                            Text(veiculo, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          ],
+                        )
+                      else 
+                        const Spacer(), // Empurra o que vem depois para o final da linha
+                      
+                      if (veiculo.isNotEmpty) const Spacer(), // Também empurra se tiver placa
+
+                      InkWell(
+                        onTap: () => _alternarStatusUsuario(user['email'], status),
+                        child: _statusBadgeInterno(status),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
-  Widget _statusBadge(String status) {
+  Widget _statusBadgeInterno(String status) {
+    Color cor = Conversores.corStatus(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        // USANDO O CONVERSOR DA UTILS
-        color: Conversores.corStatus(status).withOpacity(0.1),
+        color: cor.withOpacity(0.1),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         Conversores.formatarStatus(status),
-        style: TextStyle(
-          color: Conversores.corStatus(status), 
-          fontSize: 11, 
-          fontWeight: FontWeight.bold
-        ),
+        style: TextStyle(color: cor, fontSize: 11, fontWeight: FontWeight.bold),
       ),
     );
   }
@@ -290,10 +365,10 @@ class _UserFormModalState extends State<_UserFormModal> {
   void initState() {
     super.initState();
     if (widget.isEdit && widget.userData != null) {
-      nomeController.text = widget.userData!['nome'] ?? '';
-      emailController.text = widget.userData!['email'] ?? '';
-      placaController.text = widget.userData!['veiculo'] ?? '';
-      perfilSel = widget.userData!['perfil'] ?? 'motorista';
+      nomeController.text = (widget.userData!['nome'] ?? '').toString();
+      emailController.text = (widget.userData!['email'] ?? '').toString();
+      placaController.text = (widget.userData!['veiculo'] ?? '').toString();
+      perfilSel = (widget.userData!['perfil'] ?? 'motorista').toString();
     }
   }
 
@@ -301,15 +376,11 @@ class _UserFormModalState extends State<_UserFormModal> {
   Widget build(BuildContext context) {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      // ADICIONADO O "X" DE FECHAR
       title: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(widget.isEdit ? "Editar Usuário" : "Novo Usuário", style: const TextStyle(fontWeight: FontWeight.bold)),
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.close, color: Colors.grey),
-          ),
+          IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close, color: Colors.grey)),
         ],
       ),
       content: SingleChildScrollView(
@@ -337,59 +408,45 @@ class _UserFormModalState extends State<_UserFormModal> {
             ],
             const SizedBox(height: 30),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: widget.primaryColor,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: () async {
-                if (nomeController.text.isNotEmpty && emailController.text.isNotEmpty) {
-                  String placaLimpa = placaController.text.trim().toUpperCase();
-
-                  // TRAVA DE PLACA USANDO UTILS
-                  if (perfilSel == 'motorista') {
-                    String? erroPlaca = Validadores.validarPlaca(placaLimpa);
-                    if (erroPlaca != null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(erroPlaca), backgroundColor: Colors.red),
-                      );
-                      return;
-                    }
-                  }
-
-                  setState(() => _carregando = true);
-                  try {
-                    String senhaPadrao = "max1234";
-                    
-                    await FirebaseFirestore.instance.collection('usuarios').doc(emailController.text.trim()).set({
-                      'nome': nomeController.text.trim(),
-                      'email': emailController.text.trim(),
-                      'perfil': perfilSel,
-                      'veiculo': perfilSel == 'motorista' ? placaLimpa : "",
-                      'status': widget.userData?['status'] ?? 'ativo',
-                    }, SetOptions(merge: true));
-
-                    if (!widget.isEdit) {
-                      await FirebaseAuth.instance.createUserWithEmailAndPassword(
-                        email: emailController.text.trim(), 
-                        password: senhaPadrao
-                      );
-                    }
-                    if (context.mounted) Navigator.pop(context);
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
-                  } finally {
-                    if (mounted) setState(() => _carregando = false);
-                  }
-                }
-              },
+              style: ElevatedButton.styleFrom(backgroundColor: widget.primaryColor, minimumSize: const Size(double.infinity, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              onPressed: _carregando ? null : _processarSalvar,
               child: _carregando 
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                 : const Text("Salvar", style: TextStyle(color: Colors.white)),
-            )
+            ),
           ],
         ),
       ),
     );
+  }
+
+  void _processarSalvar() async {
+    if (nomeController.text.isEmpty || emailController.text.isEmpty) return;
+
+    String placaLimpa = placaController.text.trim().toUpperCase();
+    if (perfilSel == 'motorista') {
+      String? erroPlaca = Validadores.validarPlaca(placaLimpa);
+      if (erroPlaca != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(erroPlaca), backgroundColor: Colors.red));
+        return;
+      }
+    }
+
+    setState(() => _carregando = true);
+    try {
+      await FirebaseFirestore.instance.collection('usuarios').doc(emailController.text.trim()).set({
+        'nome': nomeController.text.trim(),
+        'email': emailController.text.trim(),
+        'perfil': perfilSel,
+        'veiculo': perfilSel == 'motorista' ? placaLimpa : "",
+        'status': widget.userData?['status'] ?? 'ativo',
+      }, SetOptions(merge: true));
+
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
+    } finally {
+      if (mounted) setState(() => _carregando = false);
+    }
   }
 }
