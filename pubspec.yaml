@@ -10,7 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
+  xml: ^6.5.0           # Para "ler" e entender o conteúdo do XML
   # Ícones e Interface
   cupertino_icons: ^1.0.8
   font_awesome_flutter: ^10.7.0 # Adicionado para ícones de frota/admin mais variados
@@ -20,7 +20,7 @@ dependencies:
   geolocator: ^14.0.2
   url_launcher: ^6.3.2
   shared_preferences: ^2.5.5
-  file_picker: ^11.0.2
+  file_picker: ^8.0.0
 
   # Firebase (Essenciais para o que vamos fazer agora)
   firebase_core: ^4.7.0

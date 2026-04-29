@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:convert';
+import 'package:xml/xml.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ImportXmlScreen extends StatefulWidget {
@@ -10,230 +13,202 @@ class ImportXmlScreen extends StatefulWidget {
 
 class _ImportXmlScreenState extends State<ImportXmlScreen> {
   final Color primaryColor = const Color(0xFF1B2C57);
-  bool _estaImportando = false;
-  double _progressoImportacao = 0.0;
-  int _totalXmlsNoBanco = 0;
+  bool _processando = false;
+  List<Map<String, dynamic>> _intimacoesParaSubir = [];
 
-  @override
-  void initState() {
-    super.initState();
-    _contarXmls();
+  void _msg(String texto, Color cor) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(texto), backgroundColor: cor, behavior: SnackBarBehavior.floating),
+    );
   }
 
-  void _contarXmls() {
-    FirebaseFirestore.instance.collection('importacoes_xml').snapshots().listen((snapshot) {
-      if (mounted) {
-        setState(() => _totalXmlsNoBanco = snapshot.docs.length);
+  Future<void> _importarXml() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xml'],
+        withData: true,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        final bytes = result.files.first.bytes;
+        if (bytes == null) return;
+
+        setState(() => _processando = true);
+        
+        final rawXml = utf8.decode(bytes);
+        final document = XmlDocument.parse(rawXml);
+        
+        final rootElements = document.findAllElements('intimacoes');
+        if (rootElements.isEmpty) throw "Tag <intimacoes> não encontrada.";
+
+        final root = rootElements.first;
+        final cartorio = root.getAttribute('cartorio') ?? "";
+        final nodes = document.findAllElements('intimacao');
+
+        List<Map<String, dynamic>> temp = [];
+        for (var node in nodes) {
+          temp.add({
+            'protocolo': node.getAttribute('protocolo') ?? "",
+            'devedor': node.getAttribute('devedor') ?? "",
+            'barra': node.getAttribute('barra') ?? "",
+            'endereco': node.getAttribute('endereco') ?? "",
+            'cep': node.getAttribute('cep') ?? "",
+            'tipodocumento': node.getAttribute('tipodocumento') ?? "",
+            'documento': node.getAttribute('documento') ?? "",
+            'cartorio_origem': cartorio,
+            'status_entrega': 'pendente',
+          });
+        }
+        
+        setState(() => _intimacoesParaSubir = temp);
+        _msg("${temp.length} registros lidos com sucesso!", primaryColor);
       }
-    });
+    } catch (e) {
+      _msg("Erro: $e", Colors.red);
+    } finally {
+      setState(() => _processando = false);
+    }
+  }
+
+  Future<void> _salvarNoBanco() async {
+    setState(() => _processando = true);
+    int novos = 0;
+    try {
+      final firestore = FirebaseFirestore.instance;
+      // Usando lotes (Batches) para eficiência em arquivos grandes
+      var batch = firestore.batch();
+      int count = 0;
+
+      for (var data in _intimacoesParaSubir) {
+        String id = "${data['protocolo']}_${data['documento']}_${data['cep']}";
+        final docRef = firestore.collection('intimacoes').doc(id);
+        
+        batch.set(docRef, data);
+        count++;
+        novos++;
+
+        // O Firebase aceita até 500 operações por batch
+        if (count == 500) {
+          await batch.commit();
+          batch = firestore.batch();
+          count = 0;
+        }
+      }
+      
+      if (count > 0) await batch.commit();
+      
+      _msg("Sucesso! $novos registros processados.", Colors.green);
+      setState(() => _intimacoesParaSubir.clear());
+    } catch (e) {
+      _msg("Erro ao salvar: $e", Colors.red);
+    } finally {
+      setState(() => _processando = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Retorna um Stack para permitir que o overlay de progresso cubra a tela
-    return Stack(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(40),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 30),
-              _buildSummaryCard(),
-              const SizedBox(height: 30),
-              _buildUploadArea(),
-              const SizedBox(height: 30),
-              const Text(
-                "Histórico de Importações", 
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B2C57))
-              ),
-              const SizedBox(height: 15),
-              Expanded(child: _buildImportHistoryTable()),
-            ],
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Column(
+        children: [
+          _buildHeader(),
+          if (_processando) const LinearProgressIndicator(),
+          Expanded(
+            child: _intimacoesParaSubir.isEmpty 
+              ? _buildEmptyState() 
+              : _buildTable(),
           ),
-        ),
-        
-        // Camada de carregamento (Overlay)
-        if (_estaImportando) _buildProgressOverlay(),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildHeader() {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("Importação de XML", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-        Text("Carga de dados via arquivos de nota fiscal", style: TextStyle(color: Colors.grey, fontSize: 14)),
-      ],
-    );
-  }
-
-  Widget _buildSummaryCard() {
     return Container(
-      padding: const EdgeInsets.all(20),
-      width: 240,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
+        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-            child: const Icon(Icons.inventory_2_outlined, color: Colors.blue),
-          ),
+          Icon(Icons.assignment_turned_in_rounded, size: 32, color: primaryColor),
           const SizedBox(width: 15),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Total Processado", style: TextStyle(fontSize: 12, color: Colors.grey)),
-              Text("$_totalXmlsNoBanco XMLs", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Carga de Dados Logísticos", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                Text("${_intimacoesParaSubir.length} registros pendentes no buffer", style: const TextStyle(color: Colors.grey)),
+              ],
+            ),
           ),
+          ElevatedButton.icon(
+            onPressed: _processando ? null : _importarXml,
+            icon: const Icon(Icons.file_upload_outlined),
+            label: const Text("SELECIONAR XML"),
+            style: ElevatedButton.styleFrom(backgroundColor: primaryColor, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18)),
+          ),
+          if (_intimacoesParaSubir.isNotEmpty) ...[
+            const SizedBox(width: 10),
+            ElevatedButton.icon(
+              onPressed: _processando ? null : _salvarNoBanco,
+              icon: const Icon(Icons.cloud_done),
+              label: const Text("SALVAR NO BANCO"),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18)),
+            ),
+          ]
         ],
       ),
     );
   }
 
-  Widget _buildUploadArea() {
-    return Container(
-      width: double.infinity,
-      height: 220,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: primaryColor.withOpacity(0.2), width: 2, style: BorderStyle.solid),
-      ),
+  Widget _buildEmptyState() {
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.drive_folder_upload, size: 50, color: primaryColor.withOpacity(0.4)),
-          const SizedBox(height: 15),
-          const Text("Selecione os arquivos XML para processamento", style: TextStyle(color: Colors.grey)),
-          const SizedBox(height: 20),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.search, size: 18, color: Colors.white),
-            label: const Text("Buscar Arquivos", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryColor,
-              padding: const EdgeInsets.symmetric(horizontal: 35, vertical: 20),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () => _simularProcessamento(),
-          ),
+          Icon(Icons.storage_rounded, size: 60, color: Colors.grey[200]),
+          const SizedBox(height: 10),
+          const Text("Nenhum dado carregado para processamento", style: TextStyle(color: Colors.grey)),
         ],
       ),
     );
   }
 
-  Widget _buildImportHistoryTable() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(15),
-        child: ListView(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(15),
-              color: Colors.grey[50],
-              child: const Row(
-                children: [
-                  Expanded(flex: 4, child: Text("ARQUIVO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  Expanded(flex: 2, child: Text("DATA", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  Expanded(flex: 2, child: Text("STATUS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                ],
-              ),
-            ),
-            _buildHistoryRow("NF_EXEMPLO_001.xml", "28/04/2026", "Sucesso"),
-            _buildHistoryRow("NF_EXEMPLO_002.xml", "28/04/2026", "Sucesso"),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHistoryRow(String nome, String data, String status) {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
-      ),
-      child: Row(
-        children: [
-          Expanded(flex: 4, child: Text(nome, style: const TextStyle(fontSize: 13))),
-          Expanded(flex: 2, child: Text(data, style: const TextStyle(fontSize: 13))),
-          Expanded(flex: 2, child: Text(status, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProgressOverlay() {
-    return Container(
-      color: Colors.black.withOpacity(0.6),
-      child: Center(
-        child: Container(
-          width: 220, height: 220,
-          decoration: BoxDecoration(
-            color: Colors.white, 
-            borderRadius: BorderRadius.circular(25),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20)],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: 130, height: 130,
-                    child: CircularProgressIndicator(
-                      value: _progressoImportacao,
-                      strokeWidth: 10,
-                      color: primaryColor,
-                      backgroundColor: Colors.grey[200]
-                    )
-                  ),
-                  Text(
-                    "${(_progressoImportacao * 100).toInt()}%",
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: primaryColor)
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              const Text("Processando...", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+  Widget _buildTable() {
+    return SizedBox(
+      width: double.infinity,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.grey[100]),
+          child: DataTable(
+            headingRowColor: MaterialStateProperty.all(Colors.grey[50]),
+            headingTextStyle: TextStyle(fontWeight: FontWeight.bold, color: primaryColor),
+            dataRowHeight: 55,
+            columns: const [
+              DataColumn(label: Text("Protocolo")),
+              DataColumn(label: Text("Devedor")),
+              DataColumn(label: Text("Documento")),
+              DataColumn(label: Text("CEP")),
+              DataColumn(label: Text("Endereço")),
             ],
+            rows: _intimacoesParaSubir.map((item) {
+              return DataRow(cells: [
+                DataCell(Text(item['protocolo'], style: const TextStyle(fontWeight: FontWeight.bold))),
+                DataCell(Text(item['devedor'])),
+                DataCell(Text(item['documento'])),
+                DataCell(Text(item['cep'])),
+                DataCell(SizedBox(width: 300, child: Text(item['endereco'], overflow: TextOverflow.ellipsis))),
+              ]);
+            }).toList(),
           ),
         ),
       ),
     );
-  }
-
-  void _simularProcessamento() async {
-    setState(() { 
-      _estaImportando = true;
-      _progressoImportacao = 0.0;
-    });
-
-    for (int i = 0; i <= 100; i += 10) {
-      await Future.delayed(const Duration(milliseconds: 250));
-      if (mounted) setState(() => _progressoImportacao = i / 100);
-    }
-
-    setState(() => _estaImportando = false);
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Carga efetuada com sucesso!"), backgroundColor: Colors.green)
-      );
-    }
   }
 }
