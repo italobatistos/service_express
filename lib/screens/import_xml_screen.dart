@@ -290,7 +290,7 @@ class _ImportXmlScreenState extends State<ImportXmlScreen> {
 
       // Notifica apenas se houveram duplicados ignorados
       if (contadorDuplicados > 0) {
-        _notificar("$contadorDuplicados itens duplicados foram ignorados automaticamente.", Colors.orange);
+        _notificar("$contadorDuplicados itens duplicados foram ignorados automaticamente.", Colors.red);
       }
 
     } catch (e) {
