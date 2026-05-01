@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:xml/xml.dart';
+import 'dart:convert';
 
 class ImportXmlScreen extends StatefulWidget {
   const ImportXmlScreen({super.key});
@@ -10,230 +13,326 @@ class ImportXmlScreen extends StatefulWidget {
 
 class _ImportXmlScreenState extends State<ImportXmlScreen> {
   final Color primaryColor = const Color(0xFF1B2C57);
-  bool _estaImportando = false;
-  double _progressoImportacao = 0.0;
-  int _totalXmlsNoBanco = 0;
+  
+  List<Map<String, dynamic>> _dadosPreProcessados = [];
+  bool _estaCarregando = false;
+  String _filtroAtual = 'Todos';
 
-  @override
-  void initState() {
-    super.initState();
-    _contarXmls();
-  }
+  int get _total => _dadosPreProcessados.length;
+  int get _sucesso => _dadosPreProcessados.where((item) => item['temp_status'] == 'Sucesso').length;
+  int get _erro => _dadosPreProcessados.where((item) => item['temp_status'] == 'Erro').length;
 
-  void _contarXmls() {
-    FirebaseFirestore.instance.collection('importacoes_xml').snapshots().listen((snapshot) {
-      if (mounted) {
-        setState(() => _totalXmlsNoBanco = snapshot.docs.length);
-      }
+  void _limparArquivos() {
+    setState(() {
+      _dadosPreProcessados = [];
+      _filtroAtual = 'Todos';
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Retorna um Stack para permitir que o overlay de progresso cubra a tela
-    return Stack(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(40),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 30),
-              _buildSummaryCard(),
-              const SizedBox(height: 30),
-              _buildUploadArea(),
-              const SizedBox(height: 30),
-              const Text(
-                "Histórico de Importações", 
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B2C57))
-              ),
-              const SizedBox(height: 15),
-              Expanded(child: _buildImportHistoryTable()),
-            ],
-          ),
-        ),
-        
-        // Camada de carregamento (Overlay)
-        if (_estaImportando) _buildProgressOverlay(),
-      ],
-    );
-  }
-
-  Widget _buildHeader() {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("Importação de XML", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-        Text("Carga de dados via arquivos de nota fiscal", style: TextStyle(color: Colors.grey, fontSize: 14)),
-      ],
-    );
-  }
-
-  Widget _buildSummaryCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      width: 240,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
-      ),
-      child: Row(
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FB),
+      body: Stack(
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-            child: const Icon(Icons.inventory_2_outlined, color: Colors.blue),
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Importação de XML', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+                const Text('Carga de dados via arquivos de nota fiscal', style: TextStyle(color: Colors.grey)),
+                const SizedBox(height: 24),
+
+                Row(
+                  children: [
+                    _buildSummaryCard("Total Processado", "$_total XMLs", Icons.desktop_windows_outlined, Colors.blue, 
+                      onTap: () => setState(() => _filtroAtual = 'Todos')),
+                    const SizedBox(width: 16),
+                    _buildSummaryCard("Prontos para Importar", "$_sucesso itens", Icons.check_circle_outline, Colors.green, 
+                      onTap: () => setState(() => _filtroAtual = 'Sucesso')),
+                    const SizedBox(width: 16),
+                    _buildSummaryCard("Inconsistências", "$_erro erros", Icons.highlight_off, Colors.red, 
+                      onTap: () => setState(() => _filtroAtual = 'Erro')),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 40),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.cloud_upload_outlined, size: 50, color: Colors.grey.shade400),
+                      const SizedBox(height: 8),
+                      const Text("Selecione os arquivos XML para processamento", style: TextStyle(color: Colors.grey)),
+                      const SizedBox(height: 20),
+                      _estaCarregando 
+                        ? const CircularProgressIndicator()
+                        : ElevatedButton.icon(
+                            onPressed: _processarLocalmente,
+                            icon: const Icon(Icons.search, size: 18),
+                            label: const Text("Buscar Arquivos"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryColor,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text("Resultados do Processamento ($_filtroAtual)", 
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primaryColor)),
+                    if (_sucesso > 0)
+                      ElevatedButton(
+                        onPressed: () => _confirmarImportacao(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Text("IMPORTAR PARA O BANCO", style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                _buildDataTable(),
+              ],
+            ),
           ),
-          const SizedBox(width: 15),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Total Processado", style: TextStyle(fontSize: 12, color: Colors.grey)),
-              Text("$_totalXmlsNoBanco XMLs", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ],
-          ),
+
+          if (_dadosPreProcessados.isNotEmpty)
+            Positioned(
+              top: 32,
+              right: 32,
+              child: TextButton.icon(
+                onPressed: _limparArquivos,
+                icon: const Icon(Icons.delete_sweep, size: 20, color: Colors.redAccent),
+                label: const Text("LIMPAR CARGA", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  elevation: 2,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildUploadArea() {
+  Widget _buildSummaryCard(String title, String value, IconData icon, Color color, {required VoidCallback onTap}) {
+    bool ativo = (_filtroAtual == 'Todos' && title == "Total Processado") ||
+                 (_filtroAtual == 'Sucesso' && title == "Prontos para Importar") ||
+                 (_filtroAtual == 'Erro' && title == "Inconsistências");
+
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: ativo ? Border.all(color: Colors.blue, width: 2) : Border.all(color: Colors.transparent, width: 2),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 5)],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                  Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDataTable() {
+    List<Map<String, dynamic>> dados = _dadosPreProcessados;
+    if (_filtroAtual == 'Sucesso') dados = _dadosPreProcessados.where((e) => e['temp_status'] == 'Sucesso').toList();
+    if (_filtroAtual == 'Erro') dados = _dadosPreProcessados.where((e) => e['temp_status'] == 'Erro').toList();
+
     return Container(
       width: double.infinity,
-      height: 220,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: primaryColor.withOpacity(0.2), width: 2, style: BorderStyle.solid),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.drive_folder_upload, size: 50, color: primaryColor.withOpacity(0.4)),
-          const SizedBox(height: 15),
-          const Text("Selecione os arquivos XML para processamento", style: TextStyle(color: Colors.grey)),
-          const SizedBox(height: 20),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.search, size: 18, color: Colors.white),
-            label: const Text("Buscar Arquivos", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryColor,
-              padding: const EdgeInsets.symmetric(horizontal: 35, vertical: 20),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () => _simularProcessamento(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildImportHistoryTable() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
+        color: Colors.white, 
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200)
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(15),
-        child: ListView(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(15),
-              color: Colors.grey[50],
-              child: const Row(
-                children: [
-                  Expanded(flex: 4, child: Text("ARQUIVO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  Expanded(flex: 2, child: Text("DATA", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  Expanded(flex: 2, child: Text("STATUS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                ],
-              ),
-            ),
-            _buildHistoryRow("NF_EXEMPLO_001.xml", "28/04/2026", "Sucesso"),
-            _buildHistoryRow("NF_EXEMPLO_002.xml", "28/04/2026", "Sucesso"),
+        borderRadius: BorderRadius.circular(12),
+        child: DataTable(
+          headingRowColor: WidgetStateProperty.all(primaryColor),
+          headingTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          columns: const [
+            DataColumn(label: Text('PROTOCOLO')),
+            DataColumn(label: Text('DEVEDOR')),
+            DataColumn(label: Text('ENDEREÇO')),
+            DataColumn(label: Text('STATUS')),
           ],
+          rows: dados.map((item) => DataRow(cells: [
+            DataCell(Text(item['protocolo'])),
+            DataCell(Text(item['devedor'])),
+            DataCell(Text(item['endereco'])),
+            DataCell(Text(
+              item['temp_status'] == 'Erro' ? "Erro: ${item['motivo']}" : "Sucesso",
+              style: TextStyle(
+                color: item['temp_status'] == 'Erro' ? Colors.red : Colors.green, 
+                fontWeight: FontWeight.bold
+              ),
+            )),
+          ])).toList(),
         ),
       ),
     );
   }
 
-  Widget _buildHistoryRow(String nome, String data, String status) {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
-      ),
-      child: Row(
-        children: [
-          Expanded(flex: 4, child: Text(nome, style: const TextStyle(fontSize: 13))),
-          Expanded(flex: 2, child: Text(data, style: const TextStyle(fontSize: 13))),
-          Expanded(flex: 2, child: Text(status, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12))),
+  Future<void> _processarLocalmente() async {
+    try {
+      FilePickerResult? result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xml'],
+        withData: true,
+        allowMultiple: true,
+      );
+
+      if (result == null) return;
+
+      setState(() => _estaCarregando = true);
+      List<Map<String, dynamic>> listaFinal = [];
+      Set<String> chavesUnicasNoArquivo = {}; 
+      int contadorDuplicados = 0;
+
+      for (var file in result.files) {
+        final content = utf8.decode(file.bytes!);
+        final document = XmlDocument.parse(content);
+        final items = document.findAllElements('intimacao');
+
+        for (var node in items) {
+          String prot = node.getAttribute('protocolo') ?? '';
+          String barra = node.getAttribute('barra') ?? '';
+          String devedor = node.getAttribute('devedor') ?? '';
+          String endereco = node.getAttribute('endereco') ?? '';
+          String doc = (node.getAttribute('documento') ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+          String tipo = node.getAttribute('tipodocumento') ?? '';
+
+          String chaveIdentidade = "$prot-$barra-$devedor-$endereco-$doc".trim().toLowerCase();
+
+          // LÓGICA DE FILTRAGEM: Se for duplicado, apenas conta e ignora (não adiciona à lista)
+          if (chavesUnicasNoArquivo.contains(chaveIdentidade)) {
+            contadorDuplicados++;
+            continue; // Pula para a próxima intimação
+          } 
+          
+          chavesUnicasNoArquivo.add(chaveIdentidade);
+
+          String motivo = "";
+          bool isValido = true;
+
+          // Validações de CPF/CNPJ e Campos
+          if (tipo.toUpperCase() == 'CPF' && doc.length != 11) {
+            isValido = false;
+            motivo = "CPF Inválido";
+          } else if (tipo.toUpperCase() == 'CNPJ' && doc.length != 14) {
+            isValido = false;
+            motivo = "CNPJ Inválido";
+          } else if (prot.isEmpty || devedor.isEmpty || endereco.isEmpty) {
+            isValido = false;
+            motivo = "Dados Incompletos";
+          }
+
+          listaFinal.add({
+            'protocolo': prot,
+            'barra': barra,
+            'devedor': devedor,
+            'endereco': endereco,
+            'cep': node.getAttribute('cep') ?? '',
+            'documento': doc,
+            'temp_status': isValido ? 'Sucesso' : 'Erro',
+            'motivo': motivo,
+          });
+        }
+      }
+
+      setState(() {
+        _dadosPreProcessados = listaFinal;
+        _estaCarregando = false;
+        _filtroAtual = 'Todos';
+      });
+
+      // Notifica apenas se houveram duplicados ignorados
+      if (contadorDuplicados > 0) {
+        _notificar("$contadorDuplicados itens duplicados foram ignorados automaticamente.", Colors.orange);
+      }
+
+    } catch (e) {
+      setState(() => _estaCarregando = false);
+      _notificar("Erro ao processar: $e", Colors.red);
+    }
+  }
+
+  void _confirmarImportacao(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Confirmar Importação"),
+        content: Text("Deseja subir $_sucesso protocolos válidos para o banco de dados?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCELAR")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
+            onPressed: () { Navigator.pop(context); _subirAoBanco(); },
+            child: const Text("CONFIRMAR", style: TextStyle(color: Colors.white)),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildProgressOverlay() {
-    return Container(
-      color: Colors.black.withOpacity(0.6),
-      child: Center(
-        child: Container(
-          width: 220, height: 220,
-          decoration: BoxDecoration(
-            color: Colors.white, 
-            borderRadius: BorderRadius.circular(25),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20)],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: 130, height: 130,
-                    child: CircularProgressIndicator(
-                      value: _progressoImportacao,
-                      strokeWidth: 10,
-                      color: primaryColor,
-                      backgroundColor: Colors.grey[200]
-                    )
-                  ),
-                  Text(
-                    "${(_progressoImportacao * 100).toInt()}%",
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: primaryColor)
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              const Text("Processando...", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _simularProcessamento() async {
-    setState(() { 
-      _estaImportando = true;
-      _progressoImportacao = 0.0;
-    });
-
-    for (int i = 0; i <= 100; i += 10) {
-      await Future.delayed(const Duration(milliseconds: 250));
-      if (mounted) setState(() => _progressoImportacao = i / 100);
-    }
-
-    setState(() => _estaImportando = false);
+  Future<void> _subirAoBanco() async {
+    setState(() => _estaCarregando = true);
+    final batch = FirebaseFirestore.instance.batch();
     
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Carga efetuada com sucesso!"), backgroundColor: Colors.green)
-      );
+    for (var item in _dadosPreProcessados) {
+      if (item['temp_status'] == 'Sucesso') {
+        final ref = FirebaseFirestore.instance.collection('intimacoes').doc();
+        final finalData = Map<String, dynamic>.from(item)..remove('temp_status')..remove('motivo');
+        batch.set(ref, {...finalData, 'status': 'Disponível', 'data_importacao': FieldValue.serverTimestamp()});
+      }
     }
+
+    await batch.commit();
+    setState(() { _dadosPreProcessados = []; _estaCarregando = false; });
+    _notificar("Importação concluída!", Colors.green);
   }
+
+  void _notificar(String m, Color c) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: c));
 }
