@@ -4,6 +4,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:xml/xml.dart';
 import 'dart:convert';
 
+/*
+  CÓDIGO CONSOLIDADO - ServiceExpress
+  Correção: Verificação de existência no banco antes da importação para evitar redundância.
+  Nota: O layout permanece rigorosamente inalterado conforme solicitado.
+*/
+
 class ImportXmlScreen extends StatefulWidget {
   const ImportXmlScreen({super.key});
 
@@ -15,6 +21,7 @@ class _ImportXmlScreenState extends State<ImportXmlScreen> {
   final Color primaryColor = const Color(0xFF1B2C57);
   
   List<Map<String, dynamic>> _dadosPreProcessados = [];
+  Set<String> _todasAsChavesCarregadas = {}; 
   bool _estaCarregando = false;
   String _filtroAtual = 'Todos';
 
@@ -25,6 +32,7 @@ class _ImportXmlScreenState extends State<ImportXmlScreen> {
   void _limparArquivos() {
     setState(() {
       _dadosPreProcessados = [];
+      _todasAsChavesCarregadas.clear(); 
       _filtroAtual = 'Todos';
     });
   }
@@ -227,8 +235,7 @@ class _ImportXmlScreenState extends State<ImportXmlScreen> {
       if (result == null) return;
 
       setState(() => _estaCarregando = true);
-      List<Map<String, dynamic>> listaFinal = [];
-      Set<String> chavesUnicasNoArquivo = {}; 
+      List<Map<String, dynamic>> listaNovosItens = [];
       int contadorDuplicados = 0;
 
       for (var file in result.files) {
@@ -246,18 +253,16 @@ class _ImportXmlScreenState extends State<ImportXmlScreen> {
 
           String chaveIdentidade = "$prot-$barra-$devedor-$endereco-$doc".trim().toLowerCase();
 
-          // LÓGICA DE FILTRAGEM: Se for duplicado, apenas conta e ignora (não adiciona à lista)
-          if (chavesUnicasNoArquivo.contains(chaveIdentidade)) {
+          if (_todasAsChavesCarregadas.contains(chaveIdentidade)) {
             contadorDuplicados++;
-            continue; // Pula para a próxima intimação
+            continue; 
           } 
           
-          chavesUnicasNoArquivo.add(chaveIdentidade);
+          _todasAsChavesCarregadas.add(chaveIdentidade);
 
           String motivo = "";
           bool isValido = true;
 
-          // Validações de CPF/CNPJ e Campos
           if (tipo.toUpperCase() == 'CPF' && doc.length != 11) {
             isValido = false;
             motivo = "CPF Inválido";
@@ -269,7 +274,7 @@ class _ImportXmlScreenState extends State<ImportXmlScreen> {
             motivo = "Dados Incompletos";
           }
 
-          listaFinal.add({
+          listaNovosItens.add({
             'protocolo': prot,
             'barra': barra,
             'devedor': devedor,
@@ -278,19 +283,18 @@ class _ImportXmlScreenState extends State<ImportXmlScreen> {
             'documento': doc,
             'temp_status': isValido ? 'Sucesso' : 'Erro',
             'motivo': motivo,
+            'chave_id': chaveIdentidade, 
           });
         }
       }
 
       setState(() {
-        _dadosPreProcessados = listaFinal;
+        _dadosPreProcessados.addAll(listaNovosItens);
         _estaCarregando = false;
-        _filtroAtual = 'Todos';
       });
 
-      // Notifica apenas se houveram duplicados ignorados
       if (contadorDuplicados > 0) {
-        _notificar("$contadorDuplicados itens duplicados foram ignorados automaticamente.", Colors.red);
+        _notificar("$contadorDuplicados itens já carregados foram ignorados.", Colors.orange);
       }
 
     } catch (e) {
@@ -318,20 +322,67 @@ class _ImportXmlScreenState extends State<ImportXmlScreen> {
   }
 
   Future<void> _subirAoBanco() async {
-    setState(() => _estaCarregando = true);
-    final batch = FirebaseFirestore.instance.batch();
-    
-    for (var item in _dadosPreProcessados) {
-      if (item['temp_status'] == 'Sucesso') {
-        final ref = FirebaseFirestore.instance.collection('intimacoes').doc();
-        final finalData = Map<String, dynamic>.from(item)..remove('temp_status')..remove('motivo');
-        batch.set(ref, {...finalData, 'status': 'Disponível', 'data_importacao': FieldValue.serverTimestamp()});
-      }
-    }
+    if (_estaCarregando) return;
 
-    await batch.commit();
-    setState(() { _dadosPreProcessados = []; _estaCarregando = false; });
-    _notificar("Importação concluída!", Colors.green);
+    setState(() => _estaCarregando = true);
+    
+    WriteBatch batch = FirebaseFirestore.instance.batch();
+    int contadorDeOperacoes = 0;
+    int totalSucesso = 0;
+    int itensJaNoBanco = 0;
+
+    try {
+      for (var item in _dadosPreProcessados) {
+        if (item['temp_status'] == 'Sucesso') {
+          
+          String docId = item['chave_id'].replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+          final ref = FirebaseFirestore.instance.collection('intimacoes').doc(docId);
+          
+          // --- CONSULTA PRÉVIA DE EXISTÊNCIA ---
+          final docSnapshot = await ref.get();
+          if (docSnapshot.exists) {
+            itensJaNoBanco++;
+            continue; // Pula este item pois ele já está no Firestore
+          }
+          
+          final finalData = Map<String, dynamic>.from(item)
+            ..remove('temp_status')
+            ..remove('motivo')
+            ..remove('chave_id');
+
+          batch.set(ref, {
+            ...finalData, 
+            'status': 'Disponível', 
+            'data_importacao': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          contadorDeOperacoes++;
+          totalSucesso++;
+
+          if (contadorDeOperacoes == 500) {
+            await batch.commit();
+            batch = FirebaseFirestore.instance.batch();
+            contadorDeOperacoes = 0;
+          }
+        }
+      }
+
+      if (contadorDeOperacoes > 0) {
+        await batch.commit();
+      }
+
+      _limparArquivos(); 
+      setState(() => _estaCarregando = false);
+      
+      String msgFinal = "Importação de $totalSucesso itens concluída.";
+      if (itensJaNoBanco > 0) msgFinal += " ($itensJaNoBanco duplicados ignorados)";
+      
+      _notificar(msgFinal, Colors.green);
+
+    } catch (e) {
+      setState(() => _estaCarregando = false);
+      _notificar("Erro ao salvar no banco: $e", Colors.red);
+    }
   }
 
   void _notificar(String m, Color c) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: c));
