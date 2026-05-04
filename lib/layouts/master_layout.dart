@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../screens/import_xml_screen.dart';
 import '../screens/admin_users_screen.dart';
+import '../screens/vincular_protocolo_screen.dart';
 
 class MasterLayout extends StatefulWidget {
   const MasterLayout({super.key});
@@ -18,11 +19,12 @@ class _MasterLayoutState extends State<MasterLayout> {
   final List<Widget> _telas = [
     const ImportXmlScreen(),      // Índice 0
     const AdminUsersScreen(),     // Índice 1
-    const Center(child: Text("Módulo Dashboard em desenvolvimento")), // 2
+    const VincularProtocolosScreen(), // Índice 2
+    const Center(child: Text("Módulo Dashboard em desenvolvimento")), // 6
     const Center(child: Text("Módulo Relatórios em desenvolvimento")), // 3
     const Center(child: Text("Módulo Pesquisas em desenvolvimento")),  // 4
     const Center(child: Text("Módulo Portal Impressões em desenvolvimento")), // 5
-    const Center(child: Text("Módulo Vinculação de Protocolos em desenvolvimento")), // 6
+    
   ];
 
   @override
@@ -78,11 +80,12 @@ class _MasterLayoutState extends State<MasterLayout> {
               children: [
                 _sidebarItem(Icons.upload_file, "Importar XML", 0),
                 _sidebarItem(Icons.people_alt_outlined, "Gestão de Usuários", 1),
-                _sidebarItem(Icons.dashboard_customize_outlined, "Dashboard", 2),
+                _sidebarItem(Icons.link, "Vinculação Protocolos", 2),
                 _sidebarItem(Icons.bar_chart_outlined, "Relatórios", 3),
                 _sidebarItem(Icons.search_rounded, "Pesquisas", 4),
                 _sidebarItem(Icons.print_outlined, "Portal Impressões", 5),
-                _sidebarItem(Icons.link, "Vinculação Protocolos", 6),
+                _sidebarItem(Icons.dashboard_customize_outlined, "Dashboard", 6),
+                
               ],
             ),
           ),
