@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../screens/import_xml_screen.dart';
 import '../screens/admin_users_screen.dart';
 import '../screens/vincular_protocolo_screen.dart';
+import '../screens/conferencia_retorno_screen.dart';
 
 class MasterLayout extends StatefulWidget {
   const MasterLayout({super.key});
@@ -15,31 +16,27 @@ class _MasterLayoutState extends State<MasterLayout> {
   final Color primaryColor = const Color(0xFF1B2C57);
   int _indiceAtual = 0;
 
-  // Lista de telas que serão alternadas no corpo do layout
+  // A ORDEM AQUI DEVE SER IDÊNTICA À ORDEM DOS ITENS NO MENU LATERAL
   final List<Widget> _telas = [
-    const ImportXmlScreen(),      // Índice 0
-    const AdminUsersScreen(),     // Índice 1
-    const VincularProtocolosScreen(), // Índice 2
-    const Center(child: Text("Módulo Dashboard em desenvolvimento")), // 6
-    const Center(child: Text("Módulo Relatórios em desenvolvimento")), // 3
-    const Center(child: Text("Módulo Pesquisas em desenvolvimento")),  // 4
-    const Center(child: Text("Módulo Portal Impressões em desenvolvimento")), // 5
-    
+    const ImportXmlScreen(),           // 0
+    const AdminUsersScreen(),          // 1
+    const VincularProtocolosScreen(),  // 2
+    const ConferenciaRetornoScreen(),  // 3 - Agora no lugar correto
+    const Center(child: Text("Módulo Relatórios em desenvolvimento")), // 4
+    const Center(child: Text("Módulo Pesquisas em desenvolvimento")),  // 5
+    const Center(child: Text("Módulo Portal Impressões em desenvolvimento")), // 6
+    const Center(child: Text("Módulo Dashboard em desenvolvimento")), // 7
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // O segredo para a Sidebar aparecer é esta Row envolvendo o corpo
       body: Row(
         children: [
-          // 1. Sidebar Fixa na Esquerda
           _buildSidebar(),
-          
-          // 2. Área de Conteúdo Dinâmico
           Expanded(
             child: Container(
-              color: const Color(0xFFF8F9FA), // Cor de fundo para destacar os cards
+              color: const Color(0xFFF8F9FA),
               child: IndexedStack(
                 index: _indiceAtual,
                 children: _telas,
@@ -58,7 +55,6 @@ class _MasterLayoutState extends State<MasterLayout> {
       child: Column(
         children: [
           const SizedBox(height: 50),
-          // Logo/Ícone do Sistema
           Container(
             height: 80, width: 80,
             decoration: BoxDecoration(
@@ -74,23 +70,21 @@ class _MasterLayoutState extends State<MasterLayout> {
           ),
           const SizedBox(height: 30),
 
-          // Menu de Navegação
           Expanded(
             child: ListView(
               children: [
                 _sidebarItem(Icons.upload_file, "Importar XML", 0),
                 _sidebarItem(Icons.people_alt_outlined, "Gestão de Usuários", 1),
                 _sidebarItem(Icons.link, "Vinculação Protocolos", 2),
-                _sidebarItem(Icons.bar_chart_outlined, "Relatórios", 3),
-                _sidebarItem(Icons.search_rounded, "Pesquisas", 4),
-                _sidebarItem(Icons.print_outlined, "Portal Impressões", 5),
-                _sidebarItem(Icons.dashboard_customize_outlined, "Dashboard", 6),
-                
+                _sidebarItem(Icons.assignment_turned_in_outlined, "Conferência Retorno", 3),
+                _sidebarItem(Icons.bar_chart_outlined, "Relatórios", 4),
+                _sidebarItem(Icons.search_rounded, "Pesquisas", 5),
+                _sidebarItem(Icons.print_outlined, "Portal Impressões", 6),
+                _sidebarItem(Icons.dashboard_customize_outlined, "Dashboard", 7),
               ],
             ),
           ),
 
-          // Botão de Logoff
           _sidebarItem(Icons.logout, "Sair", -1, isLogout: true),
           const SizedBox(height: 20),
         ],
