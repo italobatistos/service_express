@@ -11,79 +11,46 @@ class VincularProtocolosScreen extends StatefulWidget {
 class _VincularProtocolosScreenState extends State<VincularProtocolosScreen> {
   final Color primaryColor = const Color(0xFF1B2C57);
   
-  List<Map<String, dynamic>> _protocolosDisponiveis = [];
+  // Conjunto de IDs selecionados via bipagem
   Set<String> _selecionados = {}; 
-  List<Map<String, dynamic>> _listaDiligentes = [];
-  bool _estaCarregando = false;
   
   String? _diligenteIdSelecionado;
   final TextEditingController _leitorController = TextEditingController();
   final FocusNode _focoLeitor = FocusNode();
 
+  // Streams inicializadas diretamente para evitar o LateInitializationError
+  final Stream<QuerySnapshot> _usuariosStream = FirebaseFirestore.instance
+      .collection('usuarios')
+      .where('perfil', isEqualTo: 'motorista')
+      .where('status', isEqualTo: 'ativo')
+      .snapshots();
+
+  final Stream<QuerySnapshot> _protocolosStream = FirebaseFirestore.instance
+      .collection('intimacoes')
+      .where('status', isEqualTo: 'Disponível')
+      .snapshots();
+
   @override
   void initState() {
     super.initState();
-    _carregarDadosIniciais();
   }
 
-  Future<void> _carregarDadosIniciais() async {
-    setState(() => _estaCarregando = true);
-    await Future.wait([
-      _buscarDiligentes(),
-      _buscarProtocolosDisponiveis(),
-    ]);
-    setState(() => _estaCarregando = false);
-  }
-
-  // Busca usuários onde o perfil é 'motorista' (conforme seu Firebase)
-  Future<void> _buscarDiligentes() async {
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('usuarios')
-          .where('perfil', isEqualTo: 'motorista')
-          .get(); 
-
-      setState(() {
-        _listaDiligentes = snapshot.docs.map((doc) => {
-          'id': doc.id,
-          'nome': doc.data()['nome'] ?? 'Sem Nome',
-        }).toList();
-      });
-    } catch (e) {
-      print("Erro ao buscar diligentes: $e");
-    }
-  }
-
-  Future<void> _buscarProtocolosDisponiveis() async {
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('intimacoes')
-          .where('status', isEqualTo: 'Disponível')
-          .get();
-
-      setState(() {
-        _protocolosDisponiveis = snapshot.docs.map((doc) {
-          return {...doc.data(), 'id': doc.id};
-        }).toList();
-      });
-    } catch (e) {
-      _notificar("Erro ao carregar protocolos: $e", Colors.red);
-    }
-  }
-
-  // Bipagem aceita Protocolo ou Código de Barras
-  void _processarBipagem(String entrada) {
+  // Lógica de bipagem que utiliza a lista fornecida pelo StreamBuilder
+  void _processarBipagem(String entrada, List<DocumentSnapshot> listaAtual) {
     String busca = entrada.trim(); 
     if (busca.isEmpty) return;
 
     try {
-      final encontrado = _protocolosDisponiveis.firstWhere(
-        (p) => p['barra'].toString().trim() == busca || 
-               p['protocolo'].toString().trim() == busca,
+      final encontrado = listaAtual.firstWhere(
+        (doc) {
+          var p = doc.data() as Map<String, dynamic>;
+          return p['barra'].toString().trim() == busca || 
+                 p['protocolo'].toString().trim() == busca;
+        }
       );
 
       setState(() {
-        _selecionados.add(encontrado['id']);
+        _selecionados.add(encontrado.id);
         _leitorController.clear();
       });
       _focoLeitor.requestFocus(); 
@@ -94,87 +61,77 @@ class _VincularProtocolosScreenState extends State<VincularProtocolosScreen> {
     }
   }
 
-  // Função de Vínculo (Corrigida a referência)
-  Future<void> _vincularProtocolos() async {
-    if (_diligenteIdSelecionado == null) {
-      _notificar("Por favor, selecione um motorista!", Colors.orange);
-      return;
-    }
-
-    setState(() => _estaCarregando = true);
-    WriteBatch batch = FirebaseFirestore.instance.batch();
-    int contador = 0;
-
-    try {
-      for (String id in _selecionados) {
-        final ref = FirebaseFirestore.instance.collection('intimacoes').doc(id);
-        batch.update(ref, {
-          'status': 'Vinculado',
-          'diligente_id': _diligenteIdSelecionado,
-          'data_vinculacao': FieldValue.serverTimestamp(),
-        });
-
-        contador++;
-        if (contador == 500) {
-          await batch.commit();
-          batch = FirebaseFirestore.instance.batch();
-          contador = 0;
-        }
-      }
-
-      if (contador > 0) await batch.commit();
-
-      _notificar("Sucesso! ${_selecionados.length} itens vinculados.", Colors.green);
-      _selecionados.clear();
-      await _buscarProtocolosDisponiveis(); 
-    } catch (e) {
-      _notificar("Erro ao vincular: $e", Colors.red);
-    } finally {
-      setState(() => _estaCarregando = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FB),
-      body: _estaCarregando 
-        ? const Center(child: CircularProgressIndicator())
-        : SingleChildScrollView(
+    return StreamBuilder<QuerySnapshot>(
+      stream: _protocolosStream,
+      builder: (context, snapshotProtocolos) {
+        if (snapshotProtocolos.hasError) return const Center(child: Text("Erro ao carregar dados"));
+        if (!snapshotProtocolos.hasData) return const Center(child: CircularProgressIndicator());
+
+        final docsProtocolos = snapshotProtocolos.data!.docs;
+
+        return Scaffold(
+          backgroundColor: const Color(0xFFF8F9FB),
+          body: SingleChildScrollView(
             padding: const EdgeInsets.all(32),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Cabeçalho padronizado igual ao Importar XML
-                const Text('Vinculação de Protocolos', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-                const Text('Carga de dados e atribuição de motoristas', style: TextStyle(color: Colors.grey)),
+                // CABEÇALHO COM BOTÃO LIMPAR NO CANTO DIREITO
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Vinculação de Protocolos', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+                        const Text('Carga de dados e atribuição de motoristas', style: TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+                    if (_selecionados.isNotEmpty)
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _selecionados.clear();
+                            _leitorController.clear();
+                          });
+                          _notificar("Carga de bipagem limpa!", Colors.blueGrey);
+                        },
+                        icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+                        label: const Text("LIMPAR CARGA", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                      ),
+                  ],
+                ),
                 const SizedBox(height: 24),
 
                 Row(
                   children: [
-                    _buildSummaryCard("Disponíveis", "${_protocolosDisponiveis.length} itens", Icons.list_alt, Colors.blue),
+                    _buildSummaryCard("Disponíveis", "${docsProtocolos.length} itens", Icons.list_alt, Colors.blue),
                     const SizedBox(width: 16),
                     _buildSummaryCard("Selecionados", "${_selecionados.length} itens", Icons.qr_code_scanner, Colors.green),
                   ],
                 ),
                 const SizedBox(height: 24),
 
-                _buildScannerInput(),
+                _buildScannerInput(docsProtocolos),
                 const SizedBox(height: 32),
 
                 Text("Itens Disponíveis para Vínculo", 
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primaryColor)),
                 const SizedBox(height: 16),
 
-                _buildDataTable(),
+                _buildDataTable(docsProtocolos),
               ],
             ),
           ),
-      bottomNavigationBar: _selecionados.isNotEmpty ? _buildActionPanel() : null,
+          bottomNavigationBar: _selecionados.isNotEmpty ? _buildActionPanel() : null,
+        );
+      }
     );
   }
 
-  Widget _buildScannerInput() {
+  Widget _buildScannerInput(List<DocumentSnapshot> lista) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
@@ -197,7 +154,7 @@ class _VincularProtocolosScreenState extends State<VincularProtocolosScreen> {
                 border: InputBorder.none,
                 hintStyle: TextStyle(color: Colors.grey),
               ),
-              onSubmitted: _processarBipagem,
+              onSubmitted: (val) => _processarBipagem(val, lista),
             ),
           ),
         ],
@@ -205,7 +162,7 @@ class _VincularProtocolosScreenState extends State<VincularProtocolosScreen> {
     );
   }
 
-  Widget _buildDataTable() {
+  Widget _buildDataTable(List<DocumentSnapshot> docs) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -224,8 +181,9 @@ class _VincularProtocolosScreenState extends State<VincularProtocolosScreen> {
             DataColumn(label: Text('DEVEDOR')),
             DataColumn(label: Text('CÓD. BARRAS')),
           ],
-          rows: _protocolosDisponiveis.map((item) {
-            final isSelecionado = _selecionados.contains(item['id']);
+          rows: docs.map((doc) {
+            var item = doc.data() as Map<String, dynamic>;
+            final isSelecionado = _selecionados.contains(doc.id);
             return DataRow(
               selected: isSelecionado,
               cells: [
@@ -245,45 +203,88 @@ class _VincularProtocolosScreenState extends State<VincularProtocolosScreen> {
   }
 
   Widget _buildActionPanel() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade200)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: DropdownButtonFormField<String>(
-              value: _diligenteIdSelecionado,
-              decoration: InputDecoration(
-                labelText: "Selecione o Motorista", 
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                filled: true,
-                fillColor: Colors.grey.shade50,
+    return StreamBuilder<QuerySnapshot>(
+      stream: _usuariosStream,
+      builder: (context, snapshot) {
+        List<DropdownMenuItem<String>> items = [];
+        if (snapshot.hasData) {
+          items = snapshot.data!.docs.map((doc) {
+            var data = doc.data() as Map<String, dynamic>;
+            return DropdownMenuItem(
+              value: doc.id,
+              child: Text(data['nome'] ?? 'Sem Nome'),
+            );
+          }).toList();
+        }
+
+        bool aindaAtivo = items.any((item) => item.value == _diligenteIdSelecionado);
+        if (!aindaAtivo) _diligenteIdSelecionado = null;
+
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: Colors.grey.shade200)),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: _diligenteIdSelecionado,
+                  decoration: InputDecoration(
+                    labelText: "Selecione o Motorista", 
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                  ),
+                  items: items,
+                  onChanged: (val) => setState(() => _diligenteIdSelecionado = val),
+                ),
               ),
-              items: _listaDiligentes.map((d) => DropdownMenuItem(
-                value: d['id'] as String, 
-                child: Text(d['nome'] as String))
-              ).toList(),
-              onChanged: (val) => setState(() => _diligenteIdSelecionado = val),
-            ),
+              const SizedBox(width: 16),
+              ElevatedButton(
+                onPressed: _diligenteIdSelecionado == null ? null : _vincularProtocolos,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor, 
+                  foregroundColor: Colors.white, 
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text("VINCULAR ITENS", style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
           ),
-          const SizedBox(width: 16),
-          ElevatedButton(
-            onPressed: _vincularProtocolos, // Chamada corrigida
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryColor, 
-              foregroundColor: Colors.white, 
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text("VINCULAR ITENS", style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
+        );
+      }
     );
+  }
+
+  Future<void> _vincularProtocolos() async {
+    var docMotorista = await FirebaseFirestore.instance.collection('usuarios').doc(_diligenteIdSelecionado).get();
+    
+    if (!docMotorista.exists || docMotorista.data()?['status'] != 'ativo') {
+      _notificar("Este motorista não está mais ativo!", Colors.red);
+      setState(() => _diligenteIdSelecionado = null);
+      return;
+    }
+
+    WriteBatch batch = FirebaseFirestore.instance.batch();
+    try {
+      for (String id in _selecionados) {
+        final ref = FirebaseFirestore.instance.collection('intimacoes').doc(id);
+        batch.update(ref, {
+          'status': 'Vinculado',
+          'diligente_id': _diligenteIdSelecionado,
+          'data_vinculacao': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+      _notificar("Sucesso! ${_selecionados.length} itens vinculados.", Colors.green);
+      _selecionados.clear();
+    } catch (e) {
+      _notificar("Erro ao vincular: $e", Colors.red);
+    }
   }
 
   Widget _buildSummaryCard(String title, String value, IconData icon, Color color) {
