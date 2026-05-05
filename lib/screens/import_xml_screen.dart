@@ -4,12 +4,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:xml/xml.dart';
 import 'dart:convert';
 
-/*
-  CÓDIGO CONSOLIDADO - ServiceExpress
-  Correção: Verificação de existência no banco antes da importação para evitar redundância.
-  Nota: O layout permanece rigorosamente inalterado conforme solicitado.
-*/
-
 class ImportXmlScreen extends StatefulWidget {
   const ImportXmlScreen({super.key});
 
@@ -24,6 +18,16 @@ class _ImportXmlScreenState extends State<ImportXmlScreen> {
   Set<String> _todasAsChavesCarregadas = {}; 
   bool _estaCarregando = false;
   String _filtroAtual = 'Todos';
+
+  // Controllers para Importação Manual[cite: 1]
+  final TextEditingController _pManual = TextEditingController();
+  final TextEditingController _bManual = TextEditingController();
+  final TextEditingController _dManual = TextEditingController();
+  final TextEditingController _eManual = TextEditingController();
+  final TextEditingController _cManual = TextEditingController();
+  final TextEditingController _dataProtManual = TextEditingController();
+  final TextEditingController _docManual = TextEditingController();
+  String _tipoDocSelecionado = 'CNPJ'; 
 
   int get _total => _dadosPreProcessados.length;
   int get _sucesso => _dadosPreProcessados.where((item) => item['temp_status'] == 'Sucesso').length;
@@ -123,25 +127,156 @@ class _ImportXmlScreenState extends State<ImportXmlScreen> {
             ),
           ),
 
-          if (_dadosPreProcessados.isNotEmpty)
-            Positioned(
-              top: 32,
-              right: 32,
-              child: TextButton.icon(
-                onPressed: _limparArquivos,
-                icon: const Icon(Icons.delete_sweep, size: 20, color: Colors.redAccent),
-                label: const Text("LIMPAR CARGA", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                style: TextButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  elevation: 2,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          // Botões Superior Direito com padrão Azul e Branco[cite: 1]
+          Positioned(
+            top: 32,
+            right: 32,
+            child: Row(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _abrirModalManual,
+                  icon: const Icon(Icons.add_circle_outline, size: 20, color: Colors.white),
+                  label: const Text("IMPORTAÇÃO MANUAL", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    elevation: 2,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 12),
+                if (_dadosPreProcessados.isNotEmpty)
+                  ElevatedButton.icon(
+                    onPressed: _limparArquivos,
+                    icon: const Icon(Icons.delete_sweep, size: 20, color: Colors.white),
+                    label: const Text("LIMPAR CARGA", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+              ],
             ),
+          ),
         ],
       ),
     );
+  }
+
+  void _abrirModalManual() {
+    _limparControllersManual(); 
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          title: const Text("Entrada Manual de Intimação"),
+          content: SizedBox(
+            width: 600,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _dataProtManual,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: "Data Protocolo (DD/MM/AAAA)"),
+                          onChanged: (value) {
+                            if ((value.length == 2 || value.length == 5) && !value.endsWith('/')) {
+                              _dataProtManual.text = "$value/";
+                              _dataProtManual.selection = TextSelection.fromPosition(TextPosition(offset: _dataProtManual.text.length));
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(child: TextField(controller: _pManual, decoration: const InputDecoration(labelText: "Protocolo"))),
+                    ],
+                  ),
+                  TextField(controller: _bManual, decoration: const InputDecoration(labelText: "Código de Barra")),
+                  TextField(controller: _dManual, decoration: const InputDecoration(labelText: "Devedor")),
+                  TextField(controller: _eManual, decoration: const InputDecoration(labelText: "Endereço")),
+                  Row(
+                    children: [
+                      Expanded(child: TextField(controller: _cManual, decoration: const InputDecoration(labelText: "CEP"))),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: _tipoDocSelecionado,
+                          decoration: const InputDecoration(labelText: "Tipo Doc"),
+                          items: ['CPF', 'CNPJ'].map((String val) => DropdownMenuItem(value: val, child: Text(val))).toList(),
+                          onChanged: (newVal) => setModalState(() => _tipoDocSelecionado = newVal!),
+                        ),
+                      ),
+                    ],
+                  ),
+                  TextField(controller: _docManual, decoration: const InputDecoration(labelText: "Número do Documento")),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CANCELAR")),
+            ElevatedButton(
+              onPressed: () => _salvarManual(ctx),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              child: const Text("SALVAR NO BANCO", style: TextStyle(color: Colors.white)),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _salvarManual(BuildContext ctx) async {
+    if (_pManual.text.isEmpty || _bManual.text.isEmpty || _dataProtManual.text.length < 10) {
+      _notificar("Preencha os campos obrigatórios corretamente", Colors.red);
+      return;
+    }
+    
+    try {
+      List<String> p = _dataProtManual.text.split('/');
+      String dataFormatada = "${p[2]}-${p[1]}-${p[0]}";
+
+      String prot = _pManual.text.trim();
+      String barra = _bManual.text.trim();
+      String devedor = _dManual.text.trim();
+      String endereco = _eManual.text.trim();
+      String doc = _docManual.text.trim().replaceAll(RegExp(r'[^0-9]'), '');
+
+      String chaveId = "$prot-$barra-$devedor-$endereco-$doc".trim().toLowerCase();
+      String docId = chaveId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+
+      await FirebaseFirestore.instance.collection('intimacoes').doc(docId).set({
+        'data_protocolo': dataFormatada,
+        'protocolo': prot,
+        'devedor': devedor.toUpperCase(),
+        'barra': barra,
+        'endereco': endereco.toUpperCase(),
+        'cep': _cManual.text.trim(),
+        'tipodocumento': _tipoDocSelecionado,
+        'documento': doc,
+        'status': 'Disponível', 
+        'data_importacao': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      _notificar("Salvo com sucesso!", Colors.green);
+      _limparControllersManual();
+      Navigator.pop(ctx);
+    } catch (e) {
+      _notificar("Erro ao salvar: $e", Colors.red);
+    }
+  }
+
+  void _limparControllersManual() {
+    _pManual.clear(); _bManual.clear(); _dManual.clear(); 
+    _eManual.clear(); _cManual.clear(); _docManual.clear();
+    _dataProtManual.clear();
   }
 
   Widget _buildSummaryCard(String title, String value, IconData icon, Color color, {required VoidCallback onTap}) {
@@ -284,6 +419,8 @@ class _ImportXmlScreenState extends State<ImportXmlScreen> {
             'temp_status': isValido ? 'Sucesso' : 'Erro',
             'motivo': motivo,
             'chave_id': chaveIdentidade, 
+            'data_protocolo': node.getAttribute('data_protocolo') ?? '',
+            'tipodocumento': tipo,
           });
         }
       }
@@ -323,32 +460,21 @@ class _ImportXmlScreenState extends State<ImportXmlScreen> {
 
   Future<void> _subirAoBanco() async {
     if (_estaCarregando) return;
-
     setState(() => _estaCarregando = true);
-    
     WriteBatch batch = FirebaseFirestore.instance.batch();
-    int contadorDeOperacoes = 0;
-    int totalSucesso = 0;
-    int itensJaNoBanco = 0;
+    int op = 0; int total = 0; int duplicados = 0;
 
     try {
       for (var item in _dadosPreProcessados) {
         if (item['temp_status'] == 'Sucesso') {
-          
           String docId = item['chave_id'].replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
           final ref = FirebaseFirestore.instance.collection('intimacoes').doc(docId);
+          final snap = await ref.get();
           
-          // --- CONSULTA PRÉVIA DE EXISTÊNCIA ---
-          final docSnapshot = await ref.get();
-          if (docSnapshot.exists) {
-            itensJaNoBanco++;
-            continue; // Pula este item pois ele já está no Firestore
-          }
+          if (snap.exists) { duplicados++; continue; }
           
           final finalData = Map<String, dynamic>.from(item)
-            ..remove('temp_status')
-            ..remove('motivo')
-            ..remove('chave_id');
+            ..remove('temp_status')..remove('motivo')..remove('chave_id');
 
           batch.set(ref, {
             ...finalData, 
@@ -356,29 +482,14 @@ class _ImportXmlScreenState extends State<ImportXmlScreen> {
             'data_importacao': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
 
-          contadorDeOperacoes++;
-          totalSucesso++;
-
-          if (contadorDeOperacoes == 500) {
-            await batch.commit();
-            batch = FirebaseFirestore.instance.batch();
-            contadorDeOperacoes = 0;
-          }
+          op++; total++;
+          if (op == 500) { await batch.commit(); batch = FirebaseFirestore.instance.batch(); op = 0; }
         }
       }
-
-      if (contadorDeOperacoes > 0) {
-        await batch.commit();
-      }
-
+      if (op > 0) await batch.commit();
       _limparArquivos(); 
       setState(() => _estaCarregando = false);
-      
-      String msgFinal = "Importação de $totalSucesso itens concluída.";
-      if (itensJaNoBanco > 0) msgFinal += " ($itensJaNoBanco duplicados ignorados)";
-      
-      _notificar(msgFinal, Colors.green);
-
+      _notificar("Carga concluída: $total protocolos salvos.", Colors.green);
     } catch (e) {
       setState(() => _estaCarregando = false);
       _notificar("Erro ao salvar no banco: $e", Colors.red);
